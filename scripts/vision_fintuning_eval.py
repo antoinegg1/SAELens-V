@@ -1,12 +1,16 @@
 from datasets import load_dataset,load_from_disk
-from transformer_lens import HookedTransformer
+from transformer_lens import HookedTransformer,HookedChameleon
 from typing import Tuple
 from sae_lens import SAE
 from transformers import (
     LlavaNextForConditionalGeneration,
     LlavaNextProcessor,
     AutoModelForCausalLM,
+    ChameleonForConditionalGeneration, 
+    AutoTokenizer, 
+    ChameleonProcessor
 )
+import json
 import torch
 from transformer_lens.HookedLlava import HookedLlava
 from transformer_lens.utils import tokenize_and_concatenate
@@ -107,6 +111,7 @@ def text_reconstruction_test(hook_language_model, sae, token_dataset,description
     print(f"{description}_平均零置换损失:", avg_zero_loss)
 
 def image_reconstruction_test(hook_language_model, sae, token_dataset,description,batch_size=8):
+    # breakpoint()
     total_orig_loss = 0.0
     total_reconstr_loss = 0.0
     total_zero_loss = 0.0
@@ -121,19 +126,21 @@ def image_reconstruction_test(hook_language_model, sae, token_dataset,descriptio
                     break
                 # torch.cuda.empty_cache()
                 device = hook_language_model.cfg.device
-                tokens = {
-                    "input_ids": torch.tensor(data["input_ids"]).to(device),
-                    "pixel_values": torch.tensor(data["pixel_values"]).to(device),
-                    "attention_mask": torch.tensor(data["attention_mask"]).to(device),
-                    "image_sizes": torch.tensor(data["image_sizes"]).to(device) 
-                }
+                # tokens = {
+                #     "input_ids": torch.tensor(data["input_ids"]).to(device),
+                #     "pixel_values": torch.tensor(data["pixel_values"]).to(device),
+                #     "attention_mask": torch.tensor(data["attention_mask"]).to(device),
+                #     "image_sizes": torch.tensor(data["image_sizes"]).to(device) 
+                # }
+                token=torch.tensor(data["input_ids"]).to(device)
                 # 确保 tokens 在模型的设备上
                 
                 # batch_tokens = batch_tokens
 
                 # 获取模型的激活并缓存
                 _, cache = hook_language_model.run_with_cache(
-                    tokens,
+                    input=token,
+                    tokens=token,
                     prepend_bos=True,
                     names_filter=lambda name: name == sae.cfg.hook_name
                 )
@@ -149,13 +156,13 @@ def image_reconstruction_test(hook_language_model, sae, token_dataset,descriptio
 
                 # 计算原始损失
                 orig_loss = hook_language_model(
-                    tokens, return_type="loss"
+                    token, return_type="loss"
                 ).item()
                 total_orig_loss += orig_loss
 
                 # 计算重建后的损失
                 reconstr_loss = hook_language_model.run_with_hooks(
-                    tokens,
+                    token,
                     fwd_hooks=[
                         (
                             sae.cfg.hook_name,
@@ -168,7 +175,7 @@ def image_reconstruction_test(hook_language_model, sae, token_dataset,descriptio
 
                 # 计算零置换后的损失
                 zero_loss = hook_language_model.run_with_hooks(
-                    tokens,
+                    token,
                     fwd_hooks=[(sae.cfg.hook_name, zero_abl_hook)],
                     return_type="loss",
                 ).item()
@@ -179,7 +186,7 @@ def image_reconstruction_test(hook_language_model, sae, token_dataset,descriptio
                 # 清理内存
                 del activation, feature_acts, sae_out
                 torch.cuda.empty_cache()
-
+                # breakpoint()
                 # 可选：打印每个批次的损失
                 # print(f"Batch {num_batches}: Orig Loss = {orig_loss}, Reconstr Loss = {reconstr_loss}, Zero Loss = {zero_loss}")
                 pbar.update(1)
@@ -221,7 +228,20 @@ def load_hooked_llava(model_name: str, hf_model, device: str, vision_tower, mult
         n_devices=n_devices,
     )
     return hook_language_model
-
+def load_Chameleon_model(model_path: str, device: str,n_devices) -> HookedTransformer:
+    processor = ChameleonProcessor.from_pretrained(model_path)
+    hf_model = ChameleonForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True)
+    model = HookedChameleon.from_pretrained(
+        "htlou/AA-Chameleon-7B-plus",
+        hf_model=hf_model,
+        device=device,
+        fold_ln=False,
+        center_writing_weights=False,
+        center_unembed=False,
+        tokenizer=processor.tokenizer,
+        n_devices=8,
+        )
+    return model
 def load_lm_model(model_path: str) -> AutoModelForCausalLM:
     """加载因果语言模型"""
     ori_model = AutoModelForCausalLM.from_pretrained(
@@ -320,29 +340,39 @@ def run_reconstruction_test(hook_language_model, sae, token_dataset,description,
     image_reconstruction_test(hook_language_model, sae, token_dataset,description,batch_size)
 
 def main():
-    MODEL_NAME = "llava-hf/llava-v1.6-mistral-7b-hf"
-    model_path = "/mnt/file2/changye/model/llava"
+    MODEL_NAME = "htlou/AA-Chameleon-7B-plus"
+    model_path = "/mnt/file2/changye/model/AA-Chameleon-7B-plus"
     vision_device = "cuda:0"
-    tokenized_dataset_llava = load_from_disk(
-        "/mnt/file2/changye/dataset/llavasae_obelics3k-tokenized-4096_4image/batch_1",
-        # split="train",
-        # cache_dir="/mnt/file2/changye/tmp"
-    )
-    # 加载视觉模型
-    vision_model, vision_tower, multi_modal_projector = load_vision_model(
-        model_path=model_path,
-        device=vision_device
-    )
-
-    # 加载 HookedLlava 模型
-    hook_llava_model = load_hooked_llava(
-        model_name=MODEL_NAME,
-        hf_model=vision_model.language_model,
-        device=vision_device,
-        vision_tower=vision_tower,
-        multi_modal_projector=multi_modal_projector,
-        n_devices=8,
-    )
+    dataPath="/mnt/file2/changye/dataset/obelics_obelics_10k_tokenized_2048/obelics_10k_tokenized_2048.json"
+    with open(dataPath, "r") as f:
+        tokenized_dataset_llava = json.load(f)
+    # breakpoint()
+    # tokenized_dataset_llava = load_from_disk(
+    #     "/mnt/file2/changye/dataset/obelics_obelics_10k_tokenized_2048",
+    #     # split="train",
+    #     # cache_dir="/mnt/file2/changye/tmp"
+    # )
+    if "llava" in model_path.lower():
+        # 加载视觉模型
+        vision_model, vision_tower, multi_modal_projector = load_vision_model(
+            model_path=model_path,
+            device=vision_device
+        )
+        # 加载 HookedLlava 模型
+        hook_llava_model = load_hooked_llava(
+            model_name=MODEL_NAME,
+            hf_model=vision_model.language_model,
+            device=vision_device,
+            vision_tower=vision_tower,
+            multi_modal_projector=multi_modal_projector,
+            n_devices=8,
+        )
+    elif "chameleon" in model_path.lower() or "anole" in model_path.lower():
+        hook_llava_model = load_Chameleon_model(
+            model_path=model_path,
+            device="cuda:0",
+            n_devices=8,
+        )
 
     # ori_model_path = "/mnt/data/changye/model/Mistral-7B-Instruct-v0.2"
     # ori_model = load_lm_model(ori_model_path)
@@ -361,7 +391,7 @@ def main():
 
     # # 加载 SAE 模型
     sae_ori = load_sae_model(
-        path="/mnt/file2/changye/model/SAE-Mistral-7b-v0.2",
+        path="/mnt/file2/changye/model/htlou/saev_chameleon_obelics_100k/final_122880000",
         device="cuda:7"
     )
     # sae_V_llava = load_sae_model(
@@ -386,7 +416,7 @@ def main():
     #     add_bos_token=sae_ori.cfg.prepend_bos,
     #     cache_dir="/mnt/file2/changye/tmp"
     # )
-    del vision_model, vision_tower, multi_modal_projector
+    # del vision_model, vision_tower, multi_modal_projector
 
     threads = []
     thread1=threading.Thread(target=run_reconstruction_test,args=(hook_llava_model,sae_ori,tokenized_dataset_llava ,"sae_ori",5))

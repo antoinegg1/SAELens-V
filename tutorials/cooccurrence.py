@@ -14,7 +14,7 @@ from sae_lens.activation_visualization import (
 import concurrent.futures
 from transformers import AutoTokenizer, LlavaNextForConditionalGeneration, LlavaNextProcessor, AutoModelForCausalLM
 import hashlib
-
+# import pdb;pdb.set_trace()
 def generate_text_hash(text: str) -> str:
     """
     Generate a unique identifier for the given text using SHA-256.
@@ -78,10 +78,10 @@ def format_Anything_sample(raw_sample: dict):
     user_prompt = 'USER: \n<image> {input}'
     assistant_prompt = '\nASSISTANT: {output}'
     
-    prompt = raw_sample['prompt'].replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    prompt = raw_sample['question'].replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
     image = raw_sample['image']
     image = image.resize((336, 336)).convert('RGBA')
-    text_hash=generate_text_hash(raw_sample['prompt']+raw_sample['response'])
+    text_hash=generate_text_hash(raw_sample['question']+raw_sample['response_1']+raw_sample['response_2'])
     
 
     formatted_prompt = f'{system_prompt}{user_prompt.format(input=prompt)}{assistant_prompt.format(output="")}'
@@ -106,15 +106,15 @@ def process_dataset(dataset, num_proc: int = 80):
     return dataset.map(format_Anything_sample, num_proc=num_proc, remove_columns=[])
 
 def prepare_inputs(processor, formatted_sample, device):
+    text_input = processor.tokenizer(formatted_sample['prompt'], return_tensors="pt",padding=True,truncation=True,max_length=256,)
+    image_input = processor.image_processor(images=formatted_sample['image'], return_tensors="pt")
     """处理样本并准备输入"""
-    return processor(
-        text=formatted_sample['prompt'],
-        images=formatted_sample['image'],
-        return_tensors='pt',
-        padding=True, 
-        truncation=True,
-        max_length=256,
-    )
+    return {
+        "input_ids": text_input["input_ids"],
+        "attention_mask": text_input["attention_mask"],
+        "pixel_values": image_input["pixel_values"],
+        "image_sizes": image_input["image_sizes"],
+    }
 
 def save_cooccurrence_features(cooccurrence_feature_list,inputs_name_list,l0_act_list,total_processed,save_path,start_idx):
     """保存共现特征"""
@@ -245,18 +245,18 @@ if __name__ == "__main__":
 
     # Model and device configurations
     parser.add_argument('--model_name', type=str, default="llava-hf/llava-v1.6-mistral-7b-hf", help="Name of the model.")
-    parser.add_argument('--model_path', type=str, default="/data/models/llava-v1.6-mistral-7b-hf", help="Path to the model directory.")
-    parser.add_argument('--sae_path', type=str, default="/data/changye/model/llavasae_obliec100k_SAEV", help="Path to the SAE model.")
+    parser.add_argument('--model_path', type=str, default="/mnt/file2/changye/model/llava", help="Path to the model directory.")
+    parser.add_argument('--sae_path', type=str, default="/mnt/file2/changye/model/llavasae_obliec100k_SAEV", help="Path to the SAE model.")
     parser.add_argument('--sae_device', type=str, default="cuda:5", help="Device for SAE model.")
     parser.add_argument('--device', type=str, default="cuda:0", help="Device for main model.")
     parser.add_argument('--n_devices', type=int, default=8, help="Number of devices for model parallelism.")
 
     # Dataset configurations
-    parser.add_argument('--dataset_path', type=str, default="/data/changye/data/Align-Anything-TI2T-Instruction-100K", help="Path to the dataset.")
+    parser.add_argument('--dataset_path', type=str, default="/mnt/file2/changye/dataset/Align-Anything_preference", help="Path to the dataset.")
     parser.add_argument('--start_idx', type=int, default=13000)
     parser.add_argument('--end_idx', type=int, default=40000)
     parser.add_argument('--batch_size', type=int, default=10, help="Batch size for each processing step.")
-    parser.add_argument('--save_path', type=str, default="/data/changye/data/Align-Anything/")
+    parser.add_argument('--save_path', type=str, default="/mnt/file2/changye/dataset/Align-Anything-preference_interp")
     parser.add_argument('--stop_at_layer', type=int, default=17)
     args = parser.parse_args()
     

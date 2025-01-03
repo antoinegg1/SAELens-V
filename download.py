@@ -1,2 +1,15 @@
-from huggingface_hub import snapshot_download
-snapshot_download(repo_id="burkelibbey/colors", revision="main", local_files_only=False, allow_patterns="*", use_auth_token=False,local_dir="./burkelibbey/colors",repo_type="dataset")
+from datasets import load_dataset
+
+# 设置缓存目录
+cache_dir = "/mnt/file2/changye/dataset/Align-Anything_preference"
+
+# 加载指定的子数据集
+train_dataset = load_dataset(
+    'PKU-Alignment/Align-Anything',
+    name='text-image-to-text',  # 子数据集的名称
+    cache_dir=cache_dir         # 本地缓存目录
+)['train']
+
+# 查看数据集信息
+print(train_dataset)
+
