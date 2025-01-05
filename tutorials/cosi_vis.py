@@ -85,28 +85,8 @@ Score_map={
 }
 def main():
     txt_files =[
-        "/mnt/file2/changye/dataset/Align-Anything-interp/Align-Anything_cosi_weight/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-interp/Align-Anything-L0-q0_25/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_cooccur_0_25/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_l0_0_25/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_cosi_0_25/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_cosi_0_50/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_cosi_0_75/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_cosi_weight/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_l0_0_50/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_l0_0_75/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_Coccur-q0_25_preference/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_Coocur-q0_25/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_Coocur-q0_50/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_Coocur-q0_75/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_cosi_weight/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_Cosi-q0_25/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_Cosi-q0_50/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_Cosi-q0_75/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_L0-q0_50/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V_L0-q0_75/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V-Cosi-q0_25_preference/cosi_feature_list.txt",
-        "/mnt/file2/changye/dataset/RLAIF-V_interp/RLAIF-V-L0-q0_25_preference/cosi_feature_list.txt",
+        "/mnt/file2/changye/dataset/interp/AA_preference_chameleon_interp/chameleon-7b_preference/cosi_feature_list.txt",
+
         ]
     if not txt_files:
             print("没有指定任何 txt 文件！")

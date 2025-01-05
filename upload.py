@@ -47,8 +47,8 @@ def main():
     # 指定目标仓库名称和目录
     name_groups = [
         {
-            "directory_path": "/mnt/file2/changye/dataset/casual_formal_pair_ACL40k",
-            "repo_name": "casual_formal_pair_ACL40k",
+            "directory_path": "/mnt/file2/changye/dataset/NLPFINALHF",
+            "repo_name": "NLPFINALHF",
             "ignore_dirs": []
         }
     ]

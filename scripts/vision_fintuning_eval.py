@@ -1,43 +1,43 @@
-from datasets import load_dataset,load_from_disk
-from transformer_lens import HookedTransformer,HookedChameleon
+import argparse
+import json
+import threading
+import tqdm
+import torch
 from typing import Tuple
+from functools import partial
+import os
+# ============== 这里引入你已有的模块或第三方库 ==============
+from datasets import load_dataset, load_from_disk
+from transformer_lens import HookedTransformer
 from sae_lens import SAE
 from transformers import (
     LlavaNextForConditionalGeneration,
     LlavaNextProcessor,
     AutoModelForCausalLM,
-    ChameleonForConditionalGeneration, 
-    AutoTokenizer, 
-    ChameleonProcessor
+    AutoTokenizer,
 )
-import json
-import torch
 from transformer_lens.HookedLlava import HookedLlava
 from transformer_lens.utils import tokenize_and_concatenate
-import plotly.express as px
-import threading
-import tqdm
 from transformer_lens import utils
-from functools import partial
-# import pdb;pdb.set_trace()
 
+# ============== 你已有的函数：reconstruction hook等 ==============
 def reconstr_hook(activation, hook, sae_out):
     return sae_out
 
 def zero_abl_hook(activation, hook):
     return torch.zeros_like(activation)
 
-def text_reconstruction_test(hook_language_model, sae, token_dataset,description,batch_size=8):
+# ============== 文本重建测试 ==============
+def text_reconstruction_test(hook_language_model, sae, token_dataset, description, batch_size=8):
     total_orig_loss = 0.0
     total_reconstr_loss = 0.0
     total_zero_loss = 0.0
     num_batches = 0
 
-    total_tokens =50
+    total_tokens = 50
     with torch.no_grad():
-        with tqdm.tqdm(total=total_tokens, desc="Reconstruction Test") as pbar:
+        with tqdm.tqdm(total=total_tokens, desc="Text Reconstruction Test") as pbar:
             for start_idx in range(0, total_tokens, batch_size):
-                # torch.cuda.empty_cache()
                 end_idx = min(start_idx + batch_size, total_tokens)
                 batch_data = token_dataset[start_idx:end_idx]
 
@@ -57,12 +57,11 @@ def text_reconstruction_test(hook_language_model, sae, token_dataset,description
 
                 # 使用 SAE 进行编码和解码
                 activation = cache[sae.cfg.hook_name]
-                activation =activation.to(sae.device)
+                activation = activation.to(sae.device)
                 feature_acts = sae.encode(activation)
                 sae_out = sae.decode(feature_acts)
                 sae_out = sae_out.to(device)
-                # 释放缓存以节省内存
-                del cache
+                del cache  # 释放缓存
 
                 # 计算原始损失
                 orig_loss = hook_language_model(
@@ -73,12 +72,7 @@ def text_reconstruction_test(hook_language_model, sae, token_dataset,description
                 # 计算重建后的损失
                 reconstr_loss = hook_language_model.run_with_hooks(
                     batch_tokens,
-                    fwd_hooks=[
-                        (
-                            sae.cfg.hook_name,
-                            partial(reconstr_hook, sae_out=sae_out),
-                        )
-                    ],
+                    fwd_hooks=[(sae.cfg.hook_name, partial(reconstr_hook, sae_out=sae_out))],
                     return_type="loss",
                 ).item()
                 total_reconstr_loss += reconstr_loss
@@ -93,15 +87,12 @@ def text_reconstruction_test(hook_language_model, sae, token_dataset,description
 
                 num_batches += 1
 
-                # 清理内存
+                # 清理中间变量
                 del activation, feature_acts, sae_out
                 torch.cuda.empty_cache()
 
-                # 可选：打印每个批次的损失
-                # print(f"Batch {num_batches}: Orig Loss = {orig_loss}, Reconstr Loss = {reconstr_loss}, Zero Loss = {zero_loss}")
                 pbar.update(batch_size)
 
-    # 计算平均损失
     avg_orig_loss = total_orig_loss / num_batches
     avg_reconstr_loss = total_reconstr_loss / num_batches
     avg_zero_loss = total_zero_loss / num_batches
@@ -110,65 +101,54 @@ def text_reconstruction_test(hook_language_model, sae, token_dataset,description
     print(f"{description}_平均重建损失:", avg_reconstr_loss)
     print(f"{description}_平均零置换损失:", avg_zero_loss)
 
-def image_reconstruction_test(hook_language_model, sae, token_dataset,description,batch_size=8):
-    # breakpoint()
+
+# ============== 图像重建测试 ==============
+def image_reconstruction_test(hook_language_model, sae, token_dataset, description, batch_size=8):
     total_orig_loss = 0.0
     total_reconstr_loss = 0.0
     total_zero_loss = 0.0
     num_batches = 0
-    toks=0
-    total_tokens =50
+    total_tokens = 50
+    count = 0
+
     with torch.no_grad():
-        with tqdm.tqdm(total=total_tokens, desc="Reconstruction Test") as pbar:
+        with tqdm.tqdm(total=total_tokens, desc="Image Reconstruction Test") as pbar:
             for data in token_dataset:
-                toks+=1
-                if toks>total_tokens:
+                count += 1
+                if count > total_tokens:
                     break
-                # torch.cuda.empty_cache()
+
                 device = hook_language_model.cfg.device
-                # tokens = {
-                #     "input_ids": torch.tensor(data["input_ids"]).to(device),
-                #     "pixel_values": torch.tensor(data["pixel_values"]).to(device),
-                #     "attention_mask": torch.tensor(data["attention_mask"]).to(device),
-                #     "image_sizes": torch.tensor(data["image_sizes"]).to(device) 
-                # }
-                token=torch.tensor(data["input_ids"]).to(device)
-                # 确保 tokens 在模型的设备上
-                
-                # batch_tokens = batch_tokens
+                token ={
+                    "input_ids": torch.tensor(data["input_ids"]).to(device),
+                    "pixel_values": torch.tensor(data["pixel_values"]).to(device),
+                    "attention_mask": torch.tensor(data["attention_mask"]).to(device),
+                    "image_sizes": torch.tensor(data["image_sizes"]).to(device)
+                }
 
                 # 获取模型的激活并缓存
                 _, cache = hook_language_model.run_with_cache(
                     input=token,
-                    tokens=token,
                     prepend_bos=True,
                     names_filter=lambda name: name == sae.cfg.hook_name
                 )
 
                 # 使用 SAE 进行编码和解码
                 activation = cache[sae.cfg.hook_name]
-                activation =activation.to(sae.device)
+                activation = activation.to(sae.device)
                 feature_acts = sae.encode(activation)
                 sae_out = sae.decode(feature_acts)
                 sae_out = sae_out.to(device)
-                # 释放缓存以节省内存
-                del cache
+                del cache  # 释放缓存
 
                 # 计算原始损失
-                orig_loss = hook_language_model(
-                    token, return_type="loss"
-                ).item()
+                orig_loss = hook_language_model(token, return_type="loss").item()
                 total_orig_loss += orig_loss
 
                 # 计算重建后的损失
                 reconstr_loss = hook_language_model.run_with_hooks(
                     token,
-                    fwd_hooks=[
-                        (
-                            sae.cfg.hook_name,
-                            partial(reconstr_hook, sae_out=sae_out),
-                        )
-                    ],
+                    fwd_hooks=[(sae.cfg.hook_name, partial(reconstr_hook, sae_out=sae_out))],
                     return_type="loss",
                 ).item()
                 total_reconstr_loss += reconstr_loss
@@ -183,15 +163,10 @@ def image_reconstruction_test(hook_language_model, sae, token_dataset,descriptio
 
                 num_batches += 1
 
-                # 清理内存
                 del activation, feature_acts, sae_out
                 torch.cuda.empty_cache()
-                # breakpoint()
-                # 可选：打印每个批次的损失
-                # print(f"Batch {num_batches}: Orig Loss = {orig_loss}, Reconstr Loss = {reconstr_loss}, Zero Loss = {zero_loss}")
                 pbar.update(1)
 
-    # 计算平均损失
     avg_orig_loss = total_orig_loss / num_batches
     avg_reconstr_loss = total_reconstr_loss / num_batches
     avg_zero_loss = total_zero_loss / num_batches
@@ -200,24 +175,73 @@ def image_reconstruction_test(hook_language_model, sae, token_dataset,descriptio
     print(f"{description}_平均重建损失:", avg_reconstr_loss)
     print(f"{description}_平均零置换损失:", avg_zero_loss)
 
+
+# ============== L0 测试（演示的是图像数据结构） ==============
+def l0_test(sae, hook_language_model, token_dataset, description, batch_size=8):
+    sae.eval() 
+    total_tokens = 200
+    tok = 0
+    l0_list = []
+
+    with torch.no_grad():
+        with tqdm.tqdm(total=total_tokens, desc="L0 Test") as pbar:
+            for data in token_dataset:
+                tok += 1
+                if tok > total_tokens:
+                    break
+
+                device = hook_language_model.cfg.device
+                tokens = {
+                    "input_ids": torch.tensor(data["input_ids"]).to(device),
+                    "pixel_values": torch.tensor(data["pixel_values"]).to(device),
+                    "attention_mask": torch.tensor(data["attention_mask"]).to(device),
+                    "image_sizes": torch.tensor(data["image_sizes"]).to(device)
+                }
+
+                # 获取缓存
+                _, cache = hook_language_model.run_with_cache(
+                    tokens,
+                    prepend_bos=True,
+                    names_filter=lambda name: name == sae.cfg.hook_name
+                )
+
+                tmp_cache = cache[sae.cfg.hook_name].to(sae.device)
+                del cache
+
+                # SAE 编码解码
+                feature_acts = sae.encode(tmp_cache)
+                sae.decode(feature_acts)  # 这里 decode 的结果没用到，但可按需使用
+
+                # 计算 L0 范数
+                l0 = (feature_acts[:, 1:] > 0).float().sum(-1).detach()
+                result_list = l0.flatten().tolist()
+                l0_list.extend(result_list)
+
+                torch.cuda.empty_cache()
+                pbar.update(1)
+
+        l0_average = sum(l0_list) / len(l0_list)
+        print(f"平均 L0 for {description}: {l0_average}")
+
+
+# ============== 加载模型相关 ==============
 def load_vision_model(model_path: str, device: str) -> Tuple[LlavaNextForConditionalGeneration, torch.nn.Module, torch.nn.Module]:
-    """加载视觉模型和相关组件"""
     processor = LlavaNextProcessor.from_pretrained(model_path)
     vision_model = LlavaNextForConditionalGeneration.from_pretrained(
-        model_path, 
-        torch_dtype=torch.float32, 
+        model_path,
+        torch_dtype=torch.float32,
         low_cpu_mem_usage=True,
     )
     vision_tower = vision_model.vision_tower.to(device)
     multi_modal_projector = vision_model.multi_modal_projector.to(device)
     return vision_model, vision_tower, multi_modal_projector
 
+
 def load_hooked_llava(model_name: str, hf_model, device: str, vision_tower, multi_modal_projector, n_devices: int) -> HookedLlava:
-    """加载 HookedLlava 模型"""
     hook_language_model = HookedLlava.from_pretrained(
         model_name,
         hf_model=hf_model,
-        device=device, 
+        device=device,
         fold_ln=False,
         center_writing_weights=False,
         center_unembed=False,
@@ -228,99 +252,21 @@ def load_hooked_llava(model_name: str, hf_model, device: str, vision_tower, mult
         n_devices=n_devices,
     )
     return hook_language_model
-def load_Chameleon_model(model_path: str, device: str,n_devices) -> HookedTransformer:
-    processor = ChameleonProcessor.from_pretrained(model_path)
-    hf_model = ChameleonForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True)
-    model = HookedChameleon.from_pretrained(
-        "htlou/AA-Chameleon-7B-plus",
-        hf_model=hf_model,
-        device=device,
-        fold_ln=False,
-        center_writing_weights=False,
-        center_unembed=False,
-        tokenizer=processor.tokenizer,
-        n_devices=8,
-        )
-    return model
-def load_lm_model(model_path: str) -> AutoModelForCausalLM:
-    """加载因果语言模型"""
-    ori_model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch.float32,
-        low_cpu_mem_usage=True
-    )
-    return ori_model
 
 def load_sae_model(path: str, device: str) -> SAE:
-    """加载 SAE 模型"""
     sae_model = SAE.load_from_pretrained(
         path=path,
         device=device
     )
     return sae_model
 
-def l0_test(sae, hook_language_model, token_dataset,description, batch_size=8):
-    sae.eval()  # prevents error if we're expecting a dead neuron mask for who grads
-    total_tokens =200
-    tok=0
-    l0_list = []
-    with torch.no_grad():
-        # activation store can give us tokens.
-        with tqdm.tqdm(total=total_tokens, desc="L0 Test") as pbar:
-            for data in token_dataset:
-                tok+=1
-                if tok>total_tokens:
-                    break
-                # torch.cuda.empty_cache()
-                device = hook_language_model.cfg.device
-                tokens = {
-                    "input_ids": torch.tensor(data["input_ids"]).to(device),
-                    "pixel_values": torch.tensor(data["pixel_values"]).to(device),
-                    "attention_mask": torch.tensor(data["attention_mask"]).to(device),
-                    "image_sizes": torch.tensor(data["image_sizes"]).to(device) 
-                }
-                # 运行模型并获取缓存
-                _, cache = hook_language_model.run_with_cache(
-                    tokens,
-                    prepend_bos=True,
-                    names_filter=lambda name: name == sae.cfg.hook_name
-                )
-                tmp_cache=cache[sae.cfg.hook_name]
-                tmp_cache=tmp_cache.to(sae.device)
-                # 使用 SAE 编码和解码
-                feature_acts = sae.encode(tmp_cache)
-                sae_out = sae.decode(feature_acts)
 
-                # 释放缓存以节省内存
-                del cache
-
-                # 计算每个批次的 L0 范数
-                
-                l0 = (feature_acts[:, 1:] > 0).float().sum(-1).detach()
-                result_list = l0.flatten().tolist()
-                # print(l0)
-                for d in result_list:
-                    l0_list.append(d)
-
-                # 可选：打印每个批次的平均 L0 值
-                # print(f"批次 {start_idx // batch_size + 1}: 平均 L0 = {l0.mean().item()}")
-                pbar.update(1)
-
-        # 汇总所有批次的 L0 范数
-        l0_average = sum(l0_list) / len(l0_list)
-        # 输出所有批次的平均l0带上描述
-        print(
-            f"平均 L0 for {description}: {l0_average}")
-        
-        # px.histogram(l0.flatten().cpu().numpy()).show()
-
+# ============== 加载&标记化数据集（主要用于文本） ==============
 def load_and_tokenize_dataset(dataset_path: str, split: str, tokenizer, max_length: int, add_bos_token: bool):
-    """加载并对数据集进行标记化处理"""
     dataset = load_dataset(
         path=dataset_path,
         split=split,
         streaming=False,
-        cache_dir="/mnt/file2/changye/tmp",
     )
     tokenized_dataset = tokenize_and_concatenate(
         dataset=dataset,
@@ -331,113 +277,94 @@ def load_and_tokenize_dataset(dataset_path: str, split: str, tokenizer, max_leng
     )
     return tokenized_dataset
 
-def run_l0_test(sae, hook_model, token_dataset, description,batch_size=8):
-    print(f"L0 test {description}")
-    l0_test(sae, hook_model, token_dataset,description,batch_size)
-    
-def run_reconstruction_test(hook_language_model, sae, token_dataset,description,batch_size=8):
-    print(f"Reconstruction test {description}")
-    image_reconstruction_test(hook_language_model, sae, token_dataset,description,batch_size)
+
+# ============== 统一封装的测试函数调用 ==============
+def run_l0_test(sae, hook_model, token_dataset, description, batch_size=8):
+    print(f"[Run L0 Test] {description}")
+    l0_test(sae, hook_model, token_dataset, description, batch_size)
+
+
+def run_reconstruction_test(hook_language_model, sae, token_dataset, description, batch_size=8, is_image=False):
+    print(f"[Run Reconstruction Test] {description}, is_image={is_image}")
+    if is_image:
+        image_reconstruction_test(hook_language_model, sae, token_dataset, description, batch_size)
+    else:
+        text_reconstruction_test(hook_language_model, sae, token_dataset, description, batch_size)
+
+
+# ============== Argparse & Main ==============
+def parse_args():
+    parser = argparse.ArgumentParser(description="Unified testing script for reconstruction and L0.")
+    parser.add_argument("--model_path", type=str, default="/mnt/file2/changye/model/htlou/mm-interp-AA_preference_cocour_new_step10_0_10",
+                        help="The path to the LLAVA or Chameleon model (local or HF Hub).")
+    parser.add_argument("--sae_path", type=str, default="/mnt/file2/changye/model/SAE/llavasae_obliec100k_SAEV",
+                        help="The path to the trained SAE model.")
+    parser.add_argument("--data_path", type=str, required=True,
+                        help="Path to either a local dataset folder or JSON file.")
+    parser.add_argument("--device", type=str, default="cuda:0", help="Torch device to use, e.g., cuda:0.")
+    parser.add_argument("--n_devices", type=int, default=8, help="Number of devices for Hooked model.")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size for testing.")
+    parser.add_argument("--is_image", action="store_true",
+                        help="If set, use image reconstruction logic; otherwise text-based.")
+    parser.add_argument("--model_name", type=str, default="llava-hf/llava-v1.6-mistral-7b-hf",
+                        help="Model name string for hooking if needed.")
+    return parser.parse_args()
+
 
 def main():
-    MODEL_NAME = "htlou/AA-Chameleon-7B-plus"
-    model_path = "/mnt/file2/changye/model/AA-Chameleon-7B-plus"
-    vision_device = "cuda:0"
-    dataPath="/mnt/file2/changye/dataset/obelics_obelics_10k_tokenized_2048/obelics_10k_tokenized_2048.json"
-    with open(dataPath, "r") as f:
-        tokenized_dataset_llava = json.load(f)
-    # breakpoint()
-    # tokenized_dataset_llava = load_from_disk(
-    #     "/mnt/file2/changye/dataset/obelics_obelics_10k_tokenized_2048",
-    #     # split="train",
-    #     # cache_dir="/mnt/file2/changye/tmp"
-    # )
-    if "llava" in model_path.lower():
-        # 加载视觉模型
+    args = parse_args()
+    device = args.device
+
+    # 1. 加载模型（根据 model_path 判断是 LLAVA 还是 Chameleon）
+    if "llava" in args.model_path.lower():
         vision_model, vision_tower, multi_modal_projector = load_vision_model(
-            model_path=model_path,
-            device=vision_device
+            model_path=args.model_path,
+            device=device
         )
-        # 加载 HookedLlava 模型
-        hook_llava_model = load_hooked_llava(
-            model_name=MODEL_NAME,
-            hf_model=vision_model.language_model,
-            device=vision_device,
+        # LLAVA 的语言部分
+        hf_language_model = vision_model.language_model
+        # HookedLlava
+        hook_model = load_hooked_llava(
+            model_name=args.model_name,
+            hf_model=hf_language_model,
+            device=device,
             vision_tower=vision_tower,
             multi_modal_projector=multi_modal_projector,
-            n_devices=8,
+            n_devices=args.n_devices,
         )
-    elif "chameleon" in model_path.lower() or "anole" in model_path.lower():
-        hook_llava_model = load_Chameleon_model(
-            model_path=model_path,
-            device="cuda:0",
-            n_devices=8,
-        )
+    else:
+        raise ValueError("Currently only supports 'llava' in model_path.")
 
-    # ori_model_path = "/mnt/data/changye/model/Mistral-7B-Instruct-v0.2"
-    # ori_model = load_lm_model(ori_model_path)
+    # 2. 加载 SAE
+    sae_model = load_sae_model(path=args.sae_path, device=device)
 
-    # hook_ori_model = HookedLlava.from_pretrained(
-    #     "mistralai/Mistral-7B-Instruct-v0.2",
-    #     hf_model=ori_model,
-    #     device="cuda:4",
-    #     fold_ln=False,
-    #     center_writing_weights=False,
-    #     center_unembed=False,
-    #     tokenizer=None,
-    #     dtype=torch.float32,
-    #     n_devices=4,
-    # )
+    # 3. 加载数据（从 dataset 或从 JSON）
+    if os.Path(args.data_path).is_dir():
+        # 如果是文本数据集，需要在 load_and_tokenize_dataset 里进行 tokenize。
+        # 这里示例仅调用 load_from_disk，实际需要结合 tokenize 而定。
+        print(f"Loading dataset from disk: {args.data_path}")
+        tokenized_dataset = load_from_disk(args.data_path)
+    else:
+        # 从本地 JSON 文件中加载
+        print(f"Loading dataset from JSON file: {args.data_path}")
+        with open(args.data_path, "r", encoding="utf-8") as f:
+            tokenized_dataset = json.load(f)
 
-    # # 加载 SAE 模型
-    sae_ori = load_sae_model(
-        path="/mnt/file2/changye/model/htlou/saev_chameleon_obelics_100k/final_122880000",
-        device="cuda:7"
+    run_reconstruction_test(
+        hook_language_model=hook_model,
+        sae=sae_model,
+        token_dataset=tokenized_dataset,
+        description="SAE_reconstruction_Test",
+        batch_size=args.batch_size,
+        is_image=args.is_image
     )
-    # sae_V_llava = load_sae_model(
-    #     path="/mnt/file2/changye/model/llavasae_obliec100k_SAEV",
-    #     device="cuda:6"
-    # )
-
-    # sae_llava = load_sae_model(
-    #     path="/mnt/file2/changye/model/SAE-Llava-mistral-pile100k/xepk4xea/final_163840000",
-    #     device="cuda:6"
-    # )
-    
-    # 加载并标记化数据集（适用于 LLAVA）
-
-
-    # # 加载并标记化数据集（适用于原始模型）
-    # token_dataset_ori = load_and_tokenize_dataset(
-    #     dataset_path="NeelNanda/pile-10k",
-    #     split="train",
-    #     tokenizer=hook_ori_model.tokenizer,
-    #     max_length=sae_ori.cfg.context_size,
-    #     add_bos_token=sae_ori.cfg.prepend_bos,
-    #     cache_dir="/mnt/file2/changye/tmp"
-    # )
-    # del vision_model, vision_tower, multi_modal_projector
-
-    threads = []
-    thread1=threading.Thread(target=run_reconstruction_test,args=(hook_llava_model,sae_ori,tokenized_dataset_llava ,"sae_ori",5))
-    # thread2=threading.Thread(target=run_reconstruction_test,args=(hook_llava_model,sae_llava,token_dataset_llava,"sae_llava",4))
-    # thread3=threading.Thread(target=run_reconstruction_test,args=(hook_ori_model,sae_ori,token_dataset_ori,"sae_ori_ori",5))
-    # thread4=threading.Thread(target=run_reconstruction_test,args=(hook_ori_model,sae_llava,token_dataset_ori,"sae_llava_ori",4))
-    # thread5=threading.Thread(target=run_reconstruction_test,args=(hook_ori_model,sae_V_llava,token_dataset_ori,"sae_V_llava_ori",5))
-    # thread6=threading.Thread(target=run_reconstruction_test,args=(hook_llava_model,sae_ori,token_dataset_llava,"sae_ori_llava",5))
-    # threads.extend([thread1,thread2,thread3,thread4,thread5,thread6])
-    thread1.start()
-    # thread3.start()
-    thread1.join()
-    # thread3.join()
-    # thread2.start()
-    # thread4.start()
-    # thread2.join()
-    # thread4.join()
-    # thread5.start()
-    # thread6.start()
-    # thread5.join()
-    # thread6.join()
+    run_l0_test(
+        sae=sae_model,
+        hook_model=hook_model,
+        token_dataset=tokenized_dataset,
+        description="SAE_l0_Test",
+        batch_size=args.batch_size
+    )
 
 
 if __name__ == "__main__":

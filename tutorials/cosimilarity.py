@@ -44,6 +44,7 @@ from sae_lens.activation_visualization import (
     separate_feature,
     run_model,
     cal_top_cosimilarity,
+    process_single_example,
 )
 from functools import partial
 
@@ -68,23 +69,6 @@ def parse_arguments():
     parser.add_argument("--text_image_top_k", type=int, default=5)
     return parser.parse_args()
 
-def process_single_example(example, system_prompt, user_prompt, assistant_prompt, processor):
-    prompt = example['question']
-    formatted_prompt = (
-        f"{system_prompt}"
-        f"{user_prompt.format(input=prompt)}"
-        f"{assistant_prompt.format(output='')}"
-    )
-    image = example['image']
-    image = image.resize((336, 336)).convert('RGBA')
-    text_input = processor.tokenizer(formatted_prompt, return_tensors="pt")
-    image_input = processor.image_processor(images=image, return_tensors="pt")
-    return {
-        "input_ids": text_input["input_ids"],
-        "attention_mask": text_input["attention_mask"],
-        "pixel_values": image_input["pixel_values"],
-        "image_sizes": image_input["image_sizes"]
-    }
 
 def prepare_data(args, processor):
     eval_dataset = load_from_disk(args.dataset_path)

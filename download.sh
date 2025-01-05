@@ -70,11 +70,19 @@ repos=(
   # "htlou/mm-interp-AA_preference_random_0_30"
   # "htlou/mm-interp-AA_preference_random_0_20"
   # "htlou/mm-interp-AA_preference_random_0_10"
-  "Antoinegg1/CoRe_test_data"
+  "htlou/mm-interp-q0_20_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_10_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_30_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_40_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_50_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_70_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_60_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_80_preference-AA_preference_cocour_new_step10"
+  "htlou/mm-interp-q0_90_preference-AA_preference_cocour_new_step10"
 )
 
 # 你想把文件下载到的主目录
-base_dir="/mnt/file2/changye/model"
+base_dir="/mnt/file2/changye/dataset"
 
 # 确保 huggingface-cli 已经登录
 # huggingface-cli login
@@ -84,8 +92,8 @@ for repo_name in "${repos[@]}"; do
   huggingface-cli download \
     "$repo_name" \
     --local-dir "${base_dir}/${repo_name}" \
-    --repo-type dataset \
-    --exclude "checkpoint*"
+    --repo-type model \
+    --exclude "slice*"
     # --include "final*" \
 
   echo

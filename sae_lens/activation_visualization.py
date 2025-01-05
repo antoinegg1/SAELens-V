@@ -50,19 +50,22 @@ def load_llava_model(model_name: str, model_path: str, device: str,n_devices:str
         hook_language_model,
     )
 
-def load_chameleon_model(model_name: str, model_path: str, device: str):
+def load_chameleon_model(model_name, model_path, device, n_devices, stop_at_layer):
     processor = ChameleonProcessor.from_pretrained(model_path)
     hf_model = ChameleonForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True)
     model = HookedChameleon.from_pretrained(
         model_name,
         hf_model=hf_model,
         device=device,
+        n_devices=n_devices,
         fold_ln=False,
         center_writing_weights=False,
         center_unembed=False,
         tokenizer=processor.tokenizer,
+        stop_at_layer=stop_at_layer,
     )
-    return processor, hf_model, model
+    del hf_model
+    return processor, model
 
 def load_sae(sae_path: str, sae_device: str):
     sae = SAE.load_from_pretrained(
@@ -100,31 +103,36 @@ def load_dataset_func(dataset_path: str, columns_to_read: list):
         print("Dataset format set.")
     return dataset
 
-
-def prepare_input(processor,device, image, example_prompt: str):
-    # image = Image.open(image_path)
-    image = image.resize((336, 336))
-    # example_prompt = example_prompt + " <image>"
-    conversation = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": example_prompt+"<image>"},
-            ],
-        },
-    ]
-    prompt = processor.apply_chat_template(conversation, add_generation_prompt=False)
-    # print("Generated Prompt:\n", prompt)
-    inputs = processor(images=image, text=prompt, return_tensors="pt")
-    inputs =inputs.to(device)
-    inputs={
-        "input_ids": inputs["input_ids"],
-        "attention_mask": inputs["attention_mask"],
-        "pixel_values": inputs["pixel_values"],
-        "image_sizes": inputs["image_sizes"],
+def process_single_example(example, system_prompt, user_prompt, assistant_prompt, processor):
+    prompt = example['question']
+    formatted_prompt = (
+        f"{system_prompt}"
+        f"{user_prompt.format(input=prompt)}"
+        f"{assistant_prompt.format(output='')}"
+    )
+    image = example['image']
+    image = image.resize((336, 336)).convert('RGBA')
+    text_input = processor.tokenizer(formatted_prompt, return_tensors="pt")
+    image_input = processor.image_processor(images=image, return_tensors="pt")
+    return {
+        "input_ids": text_input["input_ids"],
+        "attention_mask": text_input["attention_mask"],
+        "pixel_values": image_input["pixel_values"],
+        "image_sizes": image_input["image_sizes"]
     }
-    return inputs, image
 
+def process_chameleon_single_example(example, system_prompt, user_prompt, assistant_prompt, processor):
+    prompt = example['question']
+    formatted_prompt = (
+        f"{system_prompt}"
+        f"{user_prompt.format(input=prompt)}"
+        f"{assistant_prompt.format(output='')}"
+    )
+    image = example['image']
+    image = image.resize((336, 336)).convert('RGBA')
+    input_ids=processor(image,formatted_prompt).input_ids
+    # breakpoint()
+    return {"input_ids":input_ids}
 
 def image_recover(inputs, processor):
     img_std = torch.tensor(processor.image_processor.image_std).view(3, 1, 1)
@@ -132,6 +140,27 @@ def image_recover(inputs, processor):
     img_recover = inputs.pixel_values[0].cpu() * img_std + img_mean
     img_recover = to_pil_image(img_recover)
     return img_recover
+
+def run_chameleon_model(inputs, hook_language_model, sae, sae_device: str,stop_at_layer):
+    with torch.no_grad():
+        out, cache = hook_language_model.run_with_cache(
+            input=inputs,
+            prepend_bos=True,
+            names_filter=lambda name: name == sae.cfg.hook_name,
+            stop_at_layer=stop_at_layer,
+            return_type="gererate_with_saev",
+        )
+        logit=out[0]
+        image_indice=out[1]
+        # breakpoint()
+        tmp_cache = cache[sae.cfg.hook_name]
+
+        tmp_cache = tmp_cache.to(sae_device)
+        feature_acts = sae.encode(tmp_cache)
+        # print(feature_acts.shape)
+        sae_out = sae.decode(feature_acts)
+        del cache
+    return tmp_cache,image_indice, feature_acts
 
 
 def run_model(inputs, hook_language_model, sae, sae_device: str,stop_at_layer):
@@ -155,6 +184,36 @@ def run_model(inputs, hook_language_model, sae, sae_device: str,stop_at_layer):
         sae_out = sae.decode(feature_acts)
         del cache
     return tmp_cache,image_indice, feature_acts
+
+def cal_chameleon_top_cosimilarity(logits,image_indice, feature_act):
+    #选出图片和文本token的top50激活feature(l0)
+    # image_indice: Tensor of shape ( num_indices)
+    # feature_acts: List or Tensor of shape (sequence_length, feature_dim)
+    # logits:(sequence_length, model_dim)
+    # breakpoint()
+    image_indice=torch.tensor(image_indice).to("cuda")
+    logits=logits.to(image_indice.device)
+    feature_act=feature_act.to(image_indice.device)
+    # assert image_indice.shape[0] == 1176
+
+    values, indices = torch.topk(feature_act, k=50, dim=1)  # values 和 indices 的形状均为 (num_features, 50)
+    token_list = []
+    for idx, val, logit in zip(indices, values, logits):
+        feature_dict = dict(zip(idx.tolist(), val.tolist()))
+        token_dict = {
+            'features': feature_dict,
+            'logits': logit.tolist()  # 将logit张量转换为列表
+        }
+        token_list.append(token_dict)
+
+    image_token_list = [token_list[i] for i in image_indice.tolist()]
+
+    all_indices = torch.arange(len(token_list))
+
+    text_indices = torch.tensor(list(set(all_indices.tolist()) - set(image_indice.tolist())))
+
+    text_token_list = [token_list[i] for i in text_indices.tolist()]
+    return text_token_list, image_token_list
 
 def cal_top_cosimilarity(logits,image_indice, feature_act):
     #选出图片和文本token的top50激活feature(l0)
