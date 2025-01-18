@@ -62,6 +62,13 @@ TXT_FILES = [
     "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_l0_new_step10_0_80/cosi_feature_list.txt",
 ]
 
+Chameleon_dir="/mnt/file2/changye/dataset/interp/Align-Anything-preference_chameleon_interp"
+Chameleon_FILES = []
+
+for dir in os.listdir(Chameleon_dir):
+    if os.path.isdir(os.path.join(Chameleon_dir, dir)):
+        Chameleon_FILES.append(os.path.join(Chameleon_dir, dir, "cosi_feature_list.txt"))
+
 # 文件夹名对应分数
 
 SCORE_MAP = {

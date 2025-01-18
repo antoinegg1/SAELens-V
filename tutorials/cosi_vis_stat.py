@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import nnls
 from scipy.interpolate import BSpline
 # 从 constants.py 中引入常量
-from constant import TXT_FILES, SCORE_MAP, LOWEST_SCORE, HIGHEST_SCORE
+from constant import TXT_FILES, SCORE_MAP, LOWEST_SCORE, HIGHEST_SCORE,Chameleon_FILES
 
 def read_decimal_data(filename):
     """
@@ -229,14 +229,14 @@ def create_gradient_heatmap_trace(all_traces):
 
 
 def main():
-    if not TXT_FILES:
+    if not Chameleon_FILES:
         print("没有指定任何 txt 文件！")
         return
 
     all_traces = []
     mean_score_pairs = []
 
-    for filename in TXT_FILES:
+    for filename in Chameleon_FILES:
         if not os.path.isfile(filename):
             print(f"文件 {filename} 不存在，跳过。")
             continue

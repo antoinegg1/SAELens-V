@@ -5,6 +5,8 @@ import argparse
 from tqdm import tqdm
 from datasets import load_dataset
 import tqdm
+from PIL import Image
+import io
 from sae_lens.activation_visualization import (
     load_llava_model,
     load_sae,
@@ -44,7 +46,8 @@ def load_and_process_model(model_name: str, model_path: str, device: str, sae_pa
 
 def load_and_sample_dataset(dataset_path: str, start_idx,end_idx):
     """加载并从数据集中抽取样本"""
-    train_dataset = load_dataset(dataset_path, split="train", trust_remote_code=True)
+
+    train_dataset = load_dataset(dataset_path, split="train")
     total_size = len(train_dataset)
     if start_idx >= total_size:
         print(f"start index {start_idx} is beyond the dataset size {total_size}, returning empty dataset")
@@ -87,6 +90,22 @@ def format_Anything_sample(raw_sample: dict):
     formatted_prompt = f'{system_prompt}{user_prompt.format(input=prompt)}{assistant_prompt.format(output="")}'
     return {'prompt': formatted_prompt, 'image': image,'text hash':text_hash}
 
+def format_Compcap_sample(raw_sample: dict):
+    """格式化样本，只提取 question 和 image 字段，并生成所需的 prompt"""
+    system_prompt = ""
+    user_prompt = 'USER: \n<image> {input}'
+    assistant_prompt = '\nASSISTANT: {output}'
+    
+    prompt = raw_sample['conversations'][0]["value"].replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    image = raw_sample['image']
+    image = Image.open(io.BytesIO(image))
+    image = image.resize((336, 336)).convert('RGBA')
+    text_hash=generate_text_hash(raw_sample['conversations'][0]["value"]+raw_sample['conversations'][1]["value"])
+    
+
+    formatted_prompt = f'{system_prompt}{user_prompt.format(input=prompt)}{assistant_prompt.format(output="")}'
+    return {'prompt': formatted_prompt, 'Image': image,'text hash':text_hash}
+
 def format_RLAIFV_sample(raw_sample: dict):
     """格式化样本，只提取 question 和 image 字段，并生成所需的 prompt"""
     system_prompt = ""
@@ -103,11 +122,11 @@ def format_RLAIFV_sample(raw_sample: dict):
 
 def process_dataset(dataset, num_proc: int = 80):
     """使用 map 方法处理数据集"""
-    return dataset.map(format_Anything_sample, num_proc=num_proc, remove_columns=[])
+    return dataset.map(format_Compcap_sample, num_proc=num_proc, remove_columns=['image'])
 
 def prepare_inputs(processor, formatted_sample, device):
     text_input = processor.tokenizer(formatted_sample['prompt'], return_tensors="pt",padding=True,truncation=True,max_length=256,)
-    image_input = processor.image_processor(images=formatted_sample['image'], return_tensors="pt")
+    image_input = processor.image_processor(images=formatted_sample['Image'], return_tensors="pt")
     """处理样本并准备输入"""
     return {
         "input_ids": text_input["input_ids"],
@@ -133,7 +152,7 @@ def save_cooccurrence_features(cooccurrence_feature_list,inputs_name_list,l0_act
 
 def process_batch(i, formatted_dataset, processor, args,step):
     batch = {
-        "image": formatted_dataset['image'][i:i + step],
+        "Image": formatted_dataset['Image'][i:i + step],
         "prompt": formatted_dataset['prompt'][i:i + step],
     }
     inputs = prepare_inputs(processor, batch, args.device)
@@ -144,11 +163,12 @@ def process_batch(i, formatted_dataset, processor, args,step):
 def main(args):
     # import pdb;pdb.set_trace()
     # 加载模型和数据
+    sampled_dataset = load_and_sample_dataset(args.dataset_path, start_idx=args.start_idx,end_idx=args.end_idx)
+    formatted_dataset = process_dataset(sampled_dataset, num_proc=80)
     processor, hook_language_model, sae = load_and_process_model(
         args.model_name, args.model_path, args.device, args.sae_path, args.sae_device, n_devices=args.n_devices,stop_at_layer=args.stop_at_layer
     )
-    sampled_dataset = load_and_sample_dataset(args.dataset_path, start_idx=args.start_idx,end_idx=args.end_idx)
-    formatted_dataset = process_dataset(sampled_dataset, num_proc=80)
+
 
     # 处理输入
     all_inputs = []
@@ -252,11 +272,11 @@ if __name__ == "__main__":
     parser.add_argument('--n_devices', type=int, default=8, help="Number of devices for model parallelism.")
 
     # Dataset configurations
-    parser.add_argument('--dataset_path', type=str, default="/mnt/file2/changye/dataset/Align-Anything_preference", help="Path to the dataset.")
-    parser.add_argument('--start_idx', type=int, default=13000)
-    parser.add_argument('--end_idx', type=int, default=40000)
+    parser.add_argument('--dataset_path', type=str, default="/mnt/file2/changye/dataset/CompCap-gpt4/data", help="Path to the dataset.")
+    parser.add_argument('--start_idx', type=int, default=0)
+    parser.add_argument('--end_idx', type=int, default=4000)
     parser.add_argument('--batch_size', type=int, default=10, help="Batch size for each processing step.")
-    parser.add_argument('--save_path', type=str, default="/mnt/file2/changye/dataset/Align-Anything-preference_interp")
+    parser.add_argument('--save_path', type=str, default="/mnt/file2/changye/dataset/Compcap_interp")
     parser.add_argument('--stop_at_layer', type=int, default=17)
     args = parser.parse_args()
     

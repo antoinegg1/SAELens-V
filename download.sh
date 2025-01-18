@@ -11,74 +11,7 @@ huggingface-cli login --token $HUGGINGFACE_TOKEN
 
 # 你要下载的模型仓库列表（只需列出 "htlou/xxx" 的后半部分即可）
 repos=(
-  # "mm-interp-RLAIF-V-Cosi-q0_25" #p
-  # "mm-interp-RLAIF-V-Coccur-q0_25_preference" #4
-  # "mm-interp-RLAIF-V_L0-q0_50" #4
-  # "mm-interp-RLAIF-V_Coocur-q0_75"  #0
-  # "mm-interp-Align-Anything-L0-q0_25"
-  # "mm-interp-AA_text_image_to_text"
-  # "mm-interp-RLAIF-V-L0-q0_25_preference"
-  # "mm-interp-RLAIF-V-Dataset" #0
-  # "mm-interp-RLAIF-V-Cosi-q0_75" #run0
-  # "mm-interp-RLAIF-V-Cosi-q0_50" #p
-  # "mm-interp-RLAIF-V-Cosi-q0_25_preference"
-  # "mm-interp-RLAIF-V_L0-q0_75"
-  # "mm-interp-RLAIF-V_L0-q0_25"
-  # "mm-interp-RLAIF-V_Coocur-q0_50"
-  # "mm-interp-RLAIF-V_Coocur-q0_25" #done
-  # "mm-interp-Align-Anything-Cosi-q0_25"
-  # "mm-interp-Align-Anything-Coccur-q0_25"
-  # "mm-interp-AA_preference_l0_0_75"
-  # "mm-interp-AA_preference_l0_0_50"
-  # "mm-interp-AA_preference_l0_0_25" #done
-  # "mm-interp-AA_preference_cosi_0_75"
-  # "mm-interp-AA_preference_cosi_0_50"
-  # "mm-interp-AA_preference_cosi_0_25"
-  # "mm-interp-AA_preference_cocour_q0_25" #done
-  # "mm-interp-AA_preference_cocour_0_75" #no file
-  # "mm-interp-AA_preference_cocour_0_50"
-  # "htlou/saev_anole_obelics_10k"
-  # "htlou/saev_chameleon_obelics_100k"
-  # "facebook/chameleon-7b"
-  # "htlou/mm-interp-AA_preference_cocour_new_step10_0_60"
-  # "htlou/mm-interp-AA_preference_cocour_new_step10_0_70"
-  # "htlou/mm-interp-AA_preference_cocour_new_step10_0_80"
-  # "htlou/mm-interp-AA_preference_cocour_new_step10_0_90"
-  # "htlou/mm-interp-AA_preference_cocour_new_step10_0_100"
-  # # "htlou/mm-interp-AA_preference_cosi_new_step10_0_80"
-  # # "htlou/mm-interp-AA_preference_cosi_new_step10_0_70"
-  # # "htlou/mm-interp-AA_preference_cosi_new_step10_0_60"
-  # "htlou/mm-interp-AA_preference_cosi_new_step10_0_50"
-  # "htlou/mm-interp-AA_preference_cosi_new_step10_0_40"
-  # "htlou/mm-interp-AA_preference_cosi_new_step10_0_30"
-  # "htlou/mm-interp-AA_preference_cosi_new_step10_0_20"
-  # "htlou/mm-interp-AA_preference_cosi_new_step10_0_10"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_80"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_70"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_60"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_50"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_40"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_30"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_20"
-  # "htlou/mm-interp-AA_preference_l0_new_step10_0_10"
-  # "htlou/mm-interp-AA_preference_random_0_90"
-  # "htlou/mm-interp-AA_preference_random_0_80"
-  # "htlou/mm-interp-AA_preference_random_0_70"
-  # "htlou/mm-interp-AA_preference_random_0_60"
-  # "htlou/mm-interp-AA_preference_random_0_50"
-  # "htlou/mm-interp-AA_preference_random_0_40"
-  # "htlou/mm-interp-AA_preference_random_0_30"
-  # "htlou/mm-interp-AA_preference_random_0_20"
-  # "htlou/mm-interp-AA_preference_random_0_10"
-  "htlou/mm-interp-q0_20_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_10_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_30_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_40_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_50_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_70_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_60_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_80_preference-AA_preference_cocour_new_step10"
-  "htlou/mm-interp-q0_90_preference-AA_preference_cocour_new_step10"
+  "xchen16/CompCap-gpt4"
 )
 
 # 你想把文件下载到的主目录
@@ -92,8 +25,8 @@ for repo_name in "${repos[@]}"; do
   huggingface-cli download \
     "$repo_name" \
     --local-dir "${base_dir}/${repo_name}" \
-    --repo-type model \
-    --exclude "slice*"
+    --repo-type dataset \
+    # --exclude "slice*"
     # --include "final*" \
 
   echo

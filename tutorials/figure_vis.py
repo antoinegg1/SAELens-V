@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
+from matplotlib.font_manager import FontProperties
+import matplotlib as mpl
 import numpy as np
 import seaborn as sns
-
-# 使用seaborn的主题让图表整体更美观
-sns.set_theme(style="whitegrid", font_scale=1)
+my_font_prop = FontProperties(fname="/mnt/file2/changye/Times New Roman Regular.ttf")
+# mpl.rcParams['font.family'] = my_font_prop
+# # 使用seaborn的主题让图表整体更美观
+# sns.set_theme(style="whitegrid", font_scale=1, rc={"font.family": my_font_prop})
 
 # 数据准备
 conditions = ["Mistral+T", "LLaVA-Mistral+T", "LLaVA-Mistral+T+I"]
@@ -16,9 +19,7 @@ scores = {
 }
 
 methods = list(scores.keys())
-
-
-colors = ["#4b0080", "#003399", "#2a52be", "#008000","#8bc34a" ]
+colors = ["#4b0080", "#003399", "#2a52be", "#008000","#8bc34a"]
 
 n_methods = len(methods)
 n_conditions = len(conditions)
@@ -26,18 +27,21 @@ n_conditions = len(conditions)
 x = np.arange(n_conditions)
 width = 0.15
 
-fig, ax = plt.subplots(figsize=(10,6))
+fig, ax = plt.subplots(figsize=(10, 6))
 
 for i, method in enumerate(methods):
-    offset = (i - (n_methods-1)/2)*width
+    offset = (i - (n_methods - 1) / 2) * width
     ax.bar(x + offset, scores[method], width, label=method, color=colors[i])
 
 ax.set_xticks(x)
-ax.set_xticklabels(conditions, rotation=0, fontsize=20)
+ax.set_xticklabels(conditions, rotation=0,fontproperties=my_font_prop, fontsize=24)
 
-ax.set_ylabel("Reconstruction Loss",fontsize=24)
-ax.set_title("Cross-Modal Transferability of SAE and SAE-V",fontsize=24)
-ax.legend()
+ax.set_ylabel("Reconstruction Loss", fontproperties=my_font_prop,fontsize=24)
+# ax.set_title("Cross-Modal Transferability of SAE and SAE-V", fontsize=24)
+legend=ax.legend()
+for text in legend.get_texts():
+    text.set_fontproperties(my_font_prop)
+    text.set_fontsize(12)
 
 ax.grid(axis='y', linestyle='--', alpha=0.7)
 
