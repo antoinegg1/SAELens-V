@@ -137,6 +137,8 @@ def prepare_inputs(processor, formatted_sample, device):
 
 def save_cooccurrence_features(cooccurrence_feature_list,inputs_name_list,l0_act_list,total_processed,save_path,start_idx):
     """保存共现特征"""
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
     cooccurrence_dict = {}
     l0_dict={}
     for i in range(len(inputs_name_list)):

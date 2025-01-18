@@ -10,7 +10,8 @@ do
     --sae_path "/mnt/file2/changye/model/llavasae_obliec100k_SAEV" \
     --batch_size 10 \
     --start_idx $step \
-    --end_idx $(($step+4000)) \
+    --end_idx $(($step+4000)) 
+  
   step=$(($step+4000))
 done
 
