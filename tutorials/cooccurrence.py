@@ -101,10 +101,11 @@ def format_Compcap_sample(raw_sample: dict):
     image = Image.open(io.BytesIO(image))
     image = image.resize((336, 336)).convert('RGBA')
     text_hash=generate_text_hash(raw_sample['conversations'][0]["value"]+raw_sample['conversations'][1]["value"])
-    
 
     formatted_prompt = f'{system_prompt}{user_prompt.format(input=prompt)}{assistant_prompt.format(output="")}'
     return {'prompt': formatted_prompt, 'Image': image,'text hash':text_hash}
+
+
 
 def format_RLAIFV_sample(raw_sample: dict):
     """格式化样本，只提取 question 和 image 字段，并生成所需的 prompt"""

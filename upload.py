@@ -47,8 +47,8 @@ def main():
     # 指定目标仓库名称和目录
     name_groups = [
         {
-            "directory_path": "/mnt/file2/changye/dataset/NLPFINALHF",
-            "repo_name": "NLPFINALHF",
+            "directory_path": "/mnt/file2/changye/dataset/CompCap-gpt4_1k",
+            "repo_name": "CompCap-gpt4_1k",
             "ignore_dirs": []
         }
     ]

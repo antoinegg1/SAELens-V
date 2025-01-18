@@ -9,17 +9,17 @@ my_font_prop = FontProperties(fname="/mnt/file2/changye/Times New Roman Regular.
 # sns.set_theme(style="whitegrid", font_scale=1, rc={"font.family": my_font_prop})
 
 # 数据准备
-conditions = ["Mistral+T", "LLaVA-Mistral+T", "LLaVA-Mistral+T+I"]
+conditions = ["Mistral-7B,\n Text Task", "LLaVA-NEXT-7B,\n Text Task", "LLaVA-NEXT-7B,\n Text-Vision Task"]
 scores = {
     "Zero": [10.37, 10.37, 10.37],
-    "SAE Mistral+Pile": [6.19, 6.78, 6.85],
-    "SAE Llava+Pile": [6.79, 6.76, 6.90],
-    "SAE Llava+Obelic": [2.71, 2.24, 2.64],
+    "SAE Mistral": [6.19, 6.78, 6.85],
+    "SAE Llava": [6.79, 6.76, 6.90],
+    "SAE-V Llava": [2.71, 2.24, 2.64],
     "Original": [1.62, 1.67, 2.50]
 }
 
 methods = list(scores.keys())
-colors = ["#4b0080", "#003399", "#2a52be", "#008000","#8bc34a"]
+colors = ["#4b0080", "#1D24CA", "#98ABEE", "#008000","#8bc34a"]
 
 n_methods = len(methods)
 n_conditions = len(conditions)
@@ -41,7 +41,7 @@ ax.set_ylabel("Reconstruction Loss", fontproperties=my_font_prop,fontsize=24)
 legend=ax.legend()
 for text in legend.get_texts():
     text.set_fontproperties(my_font_prop)
-    text.set_fontsize(12)
+    text.set_fontsize(18)
 
 ax.grid(axis='y', linestyle='--', alpha=0.7)
 

@@ -104,7 +104,7 @@ def load_dataset_func(dataset_path: str, columns_to_read: list):
     return dataset
 
 def process_single_example(example, system_prompt, user_prompt, assistant_prompt, processor):
-    prompt = example['question']
+    prompt = example['prompt']
     formatted_prompt = (
         f"{system_prompt}"
         f"{user_prompt.format(input=prompt)}"
