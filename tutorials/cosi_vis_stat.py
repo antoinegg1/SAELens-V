@@ -126,18 +126,33 @@ def get_second_last_folder_name(filepath):
 
 def score_to_color(score, lowest_score, highest_score):
     """
-    将分数映射到蓝-红区间，如果 score=None 则返回黑色。
-    0 -> 蓝色 (0, 0, 255)
-    1 -> 红色 (255, 0, 0)
+    将分数从低分到高分映射到「浅红 -> 深红」区间。
+    如果 score=None，则返回黑色。
     """
     if score is None:
         return "rgb(0, 0, 0)"  # 黑色
-    # 计算归一化的 score 值 [0, 1]
-    ratio = (score - lowest_score) / (highest_score - lowest_score)
-    r = int(255 * ratio)
-    g = 0
-    b = int(255 * (1 - ratio))
+
+    # 归一化到 [0, 1]
+    # normalized_score=0 对应lowest_score=浅红
+    # normalized_score=1 对应highest_score=深红
+    normalized_score =((score - lowest_score) / (highest_score - lowest_score))**3
+    # 如果实际score可能超出 [lowest_score, highest_score]，则可截断：
+    normalized_score = max(0, min(1, normalized_score))
+    # breakpoint()
+    # 浅红 (255, 200, 200)
+    light_red = (255, 200, 200)
+    # 深红 (139, 0, 0)
+    deep_red  = (180, 0, 0)
+
+    # 做线性插值
+    r = int(light_red[0] + (deep_red[0] - light_red[0]) * normalized_score)
+    g = int(light_red[1] + (deep_red[1] - light_red[1]) * normalized_score)
+    b = int(light_red[2] + (deep_red[2] - light_red[2]) * normalized_score)
+
     return f"rgb({r},{g},{b})"
+
+
+    
 
 def create_gradient_heatmap_trace(all_traces):
     """
@@ -214,11 +229,15 @@ def create_gradient_heatmap_trace(all_traces):
     # 6) 创建一个 Heatmap trace。Plotly 的 Heatmap 默认 z 的行列含义是 z[j][i] 对应 (x_i, y_j)
     #    colorscale=[(0, 'blue'), (1, 'red')] 表示 0->蓝, 1->红
     #    也可以加 'reversescale=True' 之类看需求
+    custom_colorscale = [
+        [0.0, "darkblue"],   # 值在最小端时的颜色
+        [1.0, "lightblue"]   # 值在最大端时的颜色
+    ]
     heatmap_trace = go.Heatmap(
         x=x_lin,
         y=y_lin,
         z=Z,
-        colorscale=[ [0, 'blue'], [1, 'red'] ],
+        colorscale=custom_colorscale,
         zmin=0,     # 对应 "最底"
         zmax=1,     # 对应 "最顶"
         opacity=1, # 半透明，让曲线也能看见
@@ -236,7 +255,7 @@ def main():
     all_traces = []
     mean_score_pairs = []
 
-    for filename in Chameleon_FILES:
+    for filename in TXT_FILES:
         if not os.path.isfile(filename):
             print(f"文件 {filename} 不存在，跳过。")
             continue
@@ -244,7 +263,8 @@ def main():
         folder_name = get_second_last_folder_name(filename)
         score = SCORE_MAP.get(folder_name, None)
         line_color = score_to_color(score, LOWEST_SCORE, HIGHEST_SCORE)
-
+        if line_color=="rgb(0, 0, 0)":
+            continue
         decimals = read_decimal_data(filename)
         if decimals.size == 0:
             print(f"文件 {filename} 中没有有效数据，跳过。")
@@ -265,6 +285,7 @@ def main():
             mode='lines',
             name=f"{folder_name} (score={score})",
             line=dict(color=line_color, width=2),
+            showlegend=False,
         )
         all_traces.append(trace)
 
@@ -280,16 +301,16 @@ def main():
 
     fig_original = go.Figure(data=all_traces)
     fig_original.update_layout(
-        title={
-            "text": "Model Cosimilarity Score Distributions (Colored by Performance)",
-            "font": {
-                "size": 24,  # 标题字体大小
-                "family": "Times New Roman",  # 字体
-                "color": "black"  # 字体颜色
-            },
-        },
+        # title={
+        #     "text": "Model Cosimilarity Score Distributions (Colored by Performance)",
+        #     "font": {
+        #         "size": 24,  # 标题字体大小
+        #         "family": "Times New Roman",  # 字体
+        #         "color": "black"  # 字体颜色
+        #     },
+        # },
         xaxis_title={
-            "text": "Decimal Value",
+            "text": "Cosine similarity score",
             "font": {
                 "size": 20,  # x 轴标题字体大小
                 "family": "Times New Roman",  # 字体
@@ -317,16 +338,16 @@ def main():
     if heatmap_trace is not None:
         fig_gradient = go.Figure(data=[heatmap_trace])
         fig_gradient.update_layout(
-            title={
-                "text": "Heatmap of Model Cosimilarity Score Distributions (Colored by Performance)",
-                "font": {
-                    "size": 24,  # 标题字体大小
-                    "family": "Times New Roman",  # 字体
-                    "color": "black"  # 字体颜色
-                },
-            },
+            # title={
+            #     "text": "Heatmap of Model Cosimilarity Score Distributions (Colored by Performance)",
+            #     "font": {
+            #         "size": 24,  # 标题字体大小
+            #         "family": "Times New Roman",  # 字体
+            #         "color": "black"  # 字体颜色
+            #     },
+            # },
             xaxis_title={
-                "text": "Cosimilarity score",
+                "text": "Cosine similarity score",
                 "font": {
                     "size": 20,  # x 轴标题字体大小
                     "family": "Times New Roman",  # 字体
@@ -362,7 +383,7 @@ def main():
     y_vals = [p[1] for p in mean_score_pairs]
     folder_names = [p[2] for p in mean_score_pairs]
 
-    degree = 3
+    degree = 1
     poly_params = np.polyfit(x_vals, y_vals, deg=degree)
     poly_func = np.poly1d(poly_params)
 

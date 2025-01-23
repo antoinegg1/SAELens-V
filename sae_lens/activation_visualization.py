@@ -104,7 +104,7 @@ def load_dataset_func(dataset_path: str, columns_to_read: list):
     return dataset
 
 def process_single_example(example, system_prompt, user_prompt, assistant_prompt, processor):
-    prompt = example['prompt']
+    prompt = example['question']
     formatted_prompt = (
         f"{system_prompt}"
         f"{user_prompt.format(input=prompt)}"
@@ -289,6 +289,7 @@ def separate_feature(image_indice, feature_acts):
 
 
 def patch_mapping(image_indice, feature_acts):
+    # breakpoint()
     assert image_indice.shape[0] == 1176
     newline_indices = torch.arange(image_indice[0]+576+24-1, image_indice[0]+576*2+24-1, 25)
     valid_indices = torch.tensor(
@@ -343,6 +344,7 @@ def select_patch_mapping(image_indice, feature_acts, selected_feature_indices):
     return total_activation_l0_norms, patch_features, feature_acts
 
 def weight_patch_mapping(image_indice, feature_acts, selected_feature_indices):
+
     assert image_indice.shape[0] == 1176
     newline_indices = torch.arange(
         image_indice[0] + 576 + 24 - 1, 
@@ -553,6 +555,7 @@ def generate_with_saev(inputs, hook_language_model, processor, save_path, image,
         tmp_cache_list=[tmp_cache.to(sae_device) for tmp_cache in tmp_cache_list]
         feature_acts_list = [sae.encode(tmp_cache) for tmp_cache in tmp_cache_list]
         image_indice = image_indice.to("cpu")
+        image_indice=image_indice.squeeze(0)
         feature_acts_list = [feature_acts.to("cpu") for feature_acts in feature_acts_list]
         # print(feature_acts_list)
         if selected_feature_indices is None:

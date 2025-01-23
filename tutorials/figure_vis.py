@@ -9,7 +9,7 @@ my_font_prop = FontProperties(fname="/mnt/file2/changye/Times New Roman Regular.
 # sns.set_theme(style="whitegrid", font_scale=1, rc={"font.family": my_font_prop})
 
 # 数据准备
-conditions = ["Mistral-7B,\n Text Task", "LLaVA-NEXT-7B,\n Text Task", "LLaVA-NEXT-7B,\n Text-Vision Task"]
+conditions = ["Mistral-7B,\n Text", "LLaVA-NEXT-7B,\n Text", "LLaVA-NEXT-7B,\n Text&Vision"]
 scores = {
     "Zero": [10.37, 10.37, 10.37],
     "SAE Mistral": [6.19, 6.78, 6.85],

@@ -3,15 +3,15 @@
 '''
 python /mnt/file2/changye/SAELens-V/tutorials/cosimilarity.py \
   --model_name "llava-hf/llava-v1.6-mistral-7b-hf" \
-  --model_path "/mnt/file2/changye/model/llava" \
-  --sae_path "/mnt/file2/changye/model/llavasae_obliec100k_SAEV" \
-  --sae_device "cuda:3" \
-  --device "cuda:4" \
-  --dataset_path "/mnt/file2/changye/dataset/CompCap-gpt4_1k" \
+  --model_path "/mnt/file2/changye/dataset/htlou/mm-interp-AA_preference_cocour_new_step10_0_100-llava-mistral" \
+  --sae_path "/mnt/file2/changye/model/SAE/llavasae_obliec100k_SAEV" \
+  --sae_device "cuda:4" \
+  --device "cuda:5" \
+  --dataset_path "/mnt/file2/changye/dataset/RLAIF-V-Dataset1k" \
   --system_prompt " " \
   --user_prompt "USER: \n<image> {input}" \
   --assistant_prompt "\nASSISTANT: {output}" \
-  --output_dir "/mnt/file2/changye/dataset/CompCap_interp/CompCap_cosi_weight" \
+  --output_dir "/mnt/file2/changye/dataset/interp/Align-Anything-preference_llava_interp/AA_preference_cocour_new_step10_0_100_cosi_weight" \
   --num_proc 8 \
   --n_devices 4 \
   --stop_at_layer 17 \
@@ -75,8 +75,16 @@ def parse_arguments():
 def prepare_data(args, processor):
     eval_dataset = load_from_disk(args.dataset_path)
     if "compcap" in args.dataset_path.lower():
-        eval_dataset['image'] = Image.open(io.BytesIO(eval_dataset['image']))
-        eval_dataset['prompt'] = eval_dataset['conversation'][0]["value"]
+        def process_compcap(example):
+            # 读取并处理图片
+            image = Image.open(io.BytesIO(example['image']))
+            example['Image'] = image
+            example['prompt']=example['conversations'][0]['value'].replace('<image>',' ') 
+            return example
+
+        # 修改或添加新的特征
+        eval_dataset = eval_dataset.map(process_compcap)
+    # breakpoint()
     process_fn = partial(
         process_single_example,
         system_prompt=args.system_prompt,
