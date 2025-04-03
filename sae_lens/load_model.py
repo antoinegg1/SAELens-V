@@ -40,7 +40,7 @@ def load_model(
         elif model_class_name =="HookedLlava" and "llava" in model_name:
             from transformers import LlavaForConditionalGeneration
             hf_model=LlavaForConditionalGeneration.from_pretrained(local_model_path)
-        elif model_class_name =="HookedLlava" and "mistralai/Mistral-7B-Instruct-v0.2" in model_name:
+        elif model_class_name =="HookedLlava" and  ("mistralai/Mistral-7B-Instruct-v0.2" in model_name or "vicuna" in model_name.lower() ):
             hf_model = AutoModelForCausalLM.from_pretrained(local_model_path)
         else:
             hf_model = AutoModelForSeq2SeqLM.from_pretrained(local_model_path)
@@ -97,7 +97,7 @@ def load_model(
             torch.cuda.empty_cache()
             print("clear hf model")
             return model
-    elif model_class_name == "HookedLlava" and "mistralai/Mistral-7B-Instruct-v0.2" in model_name:
+    elif model_class_name == "HookedLlava" and   ("mistralai/Mistral-7B-Instruct-v0.2" in model_name or "vicuna" in model_name.lower() ):
         if HookedLlava is None:
             raise ValueError("HookedLlava is not installed")
         if hf_model is None:

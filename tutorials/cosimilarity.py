@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 '''
-python /mnt/file2/changye/SAELens-V/tutorials/cosimilarity.py \
+python /aifs4su/yaodong/changye/SAELens-V/tutorials/cosimilarity.py \
   --model_name "llava-hf/llava-v1.6-mistral-7b-hf" \
-  --model_path "/mnt/file2/changye/dataset/htlou/mm-interp-AA_preference_cocour_new_step10_0_100-llava-mistral" \
-  --sae_path "/mnt/file2/changye/model/SAE/llavasae_obliec100k_SAEV" \
-  --sae_device "cuda:4" \
-  --device "cuda:5" \
-  --dataset_path "/mnt/file2/changye/dataset/RLAIF-V-Dataset1k" \
+  --model_path "/aifs4su/yaodong/changye/model/llava-hf/llava-v1.6-mistral-7b-hf" \
+  --sae_path "/aifs4su/yaodong/changye/model/Antoinegg1/llavasae_obliec100k_SAEV" \
+  --sae_device "cuda:7" \
+  --device "cuda:4" \
+  --dataset_path "/aifs4su/yaodong/changye/data/AA_preference1k" \
   --system_prompt " " \
   --user_prompt "USER: \n<image> {input}" \
   --assistant_prompt "\nASSISTANT: {output}" \
-  --output_dir "/mnt/file2/changye/dataset/interp/Align-Anything-preference_llava_interp/AA_preference_cocour_new_step10_0_100_cosi_weight" \
+  --output_dir "/aifs4su/yaodong/changye/data/AA_preference_mistral-7b_pair_interp/AA_preference_mistral-7b_cosi_weight" \
   --num_proc 8 \
   --n_devices 4 \
   --stop_at_layer 17 \
@@ -74,12 +74,13 @@ def parse_arguments():
 
 def prepare_data(args, processor):
     eval_dataset = load_from_disk(args.dataset_path)
-    if "compcap" in args.dataset_path.lower():
+    # breakpoint()
+    if "compcap" in args.dataset_path.lower() or "mmi" in args.dataset_path.lower():
         def process_compcap(example):
             # 读取并处理图片
-            image = Image.open(io.BytesIO(example['image']))
-            example['Image'] = image
-            example['prompt']=example['conversations'][0]['value'].replace('<image>',' ') 
+            example['Image'] =example['image']
+    
+            example['question']=example['conversations'][0]['value'].replace('<image>',' ') 
             return example
 
         # 修改或添加新的特征
@@ -205,6 +206,19 @@ def process_activations_and_save(text_token_meta_list, image_token_meta_list, ar
                                 cosine_similarity = numerator / denominator
                             cosine_similarities.append(cosine_similarity)
                     average_cosine_similarity = np.mean(cosine_similarities)
+                    # print("pair cosimilarty")
+                    # cosine_similarities = []
+                    # for idx in range(len(text_logits)):
+                    #     t_logit = np.array(text_logits[idx])
+                    #     i_logit = np.array(image_logits[idx])
+                    #     numerator = np.dot(t_logit, i_logit)
+                    #     denominator = np.linalg.norm(t_logit) * np.linalg.norm(i_logit)
+                    #     if denominator == 0:
+                    #         cosine_similarity = 0
+                    #     else:
+                    #         cosine_similarity = numerator / denominator
+                    #     cosine_similarities.append(cosine_similarity)
+                    # average_cosine_similarity = np.mean(cosine_similarities)
                     cosi_feature_list.append((i, average_cosine_similarity))
             pbar.update(1)
             pbar.refresh()
@@ -232,8 +246,8 @@ def process_activations_and_save(text_token_meta_list, image_token_meta_list, ar
 
 def main():
     args = parse_arguments()
-    os.environ["http_proxy"] = "http://127.0.0.1:7895"
-    os.environ["https_proxy"] = "http://127.0.0.1:7895"
+    # os.environ["http_proxy"] = "http://127.0.0.1:7895"
+    # os.environ["https_proxy"] = "http://127.0.0.1:7895"
 
     processor, hook_language_model = load_llava_model(
         args.model_name, 

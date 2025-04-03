@@ -13,11 +13,11 @@ from collections import Counter, defaultdict
 ## obelic100k:37827
 
 # 输入和输出文件路径
-input_path = "/home/saev/hantao/data/obelics_obelics_100k/obelics_100k.json"
-output_path = "/home/saev/changye/data/obelics_100k_washed.json"
+input_path = "/aifs4su/yaodong/changye/data/obelics_100k/obelics_100k.json"
+output_path = "/aifs4su/yaodong/changye/data/obelics_100k/obelics_100k_washed.json"
 
 # 图片保存目录
-images_dir = "/home/saev/changye/data/images"
+images_dir = "/aifs4su/yaodong/changye/data/obelics100k_washed/images"
 os.makedirs(images_dir, exist_ok=True)
 
 # 读取输入数据
@@ -64,7 +64,7 @@ def get_random_headers():
     }
 
 # 设置在模拟请求时的重试次数
-SIMULATED_REQUEST_RETRIES = 2
+SIMULATED_REQUEST_RETRIES = 1
 
 # 初始化统计数据
 error_counter = Counter()

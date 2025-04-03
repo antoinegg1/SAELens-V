@@ -295,18 +295,17 @@ def run_reconstruction_test(hook_language_model, sae, token_dataset, description
 # ============== Argparse & Main ==============
 def parse_args():
     parser = argparse.ArgumentParser(description="Unified testing script for reconstruction and L0.")
-    parser.add_argument("--model_path", type=str, default="/mnt/file2/changye/model/htlou/mm-interp-AA_preference_cocour_new_step10_0_10",
+    parser.add_argument("--model_path", type=str, default="/aifs4su/yaodong/changye/model/llava-hf/llava-v1.6-vicuna-13b-hf",
                         help="The path to the LLAVA or Chameleon model (local or HF Hub).")
-    parser.add_argument("--sae_path", type=str, default="/mnt/file2/changye/model/SAE/llavasae_obliec100k_SAEV",
+    parser.add_argument("--sae_path", type=str, default="/aifs4su/yaodong/changye/checkpointsV-V13-pile10k/cy1jfqit/final_30720000",
                         help="The path to the trained SAE model.")
-    parser.add_argument("--data_path", type=str, required=True,
-                        help="Path to either a local dataset folder or JSON file.")
+    parser.add_argument("--data_path", type=str, default="/aifs4su/yaodong/changye/data/Antoinegg1/obelics_100k-tokenized-4image_llava_vicuna-13B_4096/batch_1",help="Path to either a local dataset folder or JSON file.")
     parser.add_argument("--device", type=str, default="cuda:0", help="Torch device to use, e.g., cuda:0.")
     parser.add_argument("--n_devices", type=int, default=8, help="Number of devices for Hooked model.")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size for testing.")
-    parser.add_argument("--is_image", action="store_true",
+    parser.add_argument("--is_image", default=True,
                         help="If set, use image reconstruction logic; otherwise text-based.")
-    parser.add_argument("--model_name", type=str, default="llava-hf/llava-v1.6-mistral-7b-hf",
+    parser.add_argument("--model_name", type=str, default="llava-hf/llava-v1.6-vicuna-13b-hf",
                         help="Model name string for hooking if needed.")
     return parser.parse_args()
 
@@ -339,7 +338,7 @@ def main():
     sae_model = load_sae_model(path=args.sae_path, device=device)
 
     # 3. 加载数据（从 dataset 或从 JSON）
-    if os.Path(args.data_path).is_dir():
+    if os.path.isdir(args.data_path):
         # 如果是文本数据集，需要在 load_and_tokenize_dataset 里进行 tokenize。
         # 这里示例仅调用 load_from_disk，实际需要结合 tokenize 而定。
         print(f"Loading dataset from disk: {args.data_path}")

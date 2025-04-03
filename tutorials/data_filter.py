@@ -16,7 +16,7 @@ def regularize_Compcap(data_path):
     # 读取数据集
     dataset = load_dataset(data_path)
     # 选择需要保留的列
-    columns_to_keep = ["prompt", "Image", "conversation"]
+    columns_to_keep = ["prompt", "image", "conversation"]
     # 使用 remove_columns 移除不需要的列
     dataset = dataset.remove_columns([col for col in dataset.column_names if col not in columns_to_keep])
 
@@ -36,20 +36,20 @@ def generate_text_hash(text: str) -> str:
     hash_object = hashlib.sha256(text.encode('utf-8'))
     return hash_object.hexdigest()
 # 示例文件路径
-file_path = "/mnt/file2/changye/dataset/Align-Anything-preference_interp/Align-Anything-preference_coocur.pt"
+file_path = "/aifs4su/yaodong/changye/data/AA_preference_vicuna-13b_interp/AA_preference_vicuna-13b_cosi_weight/AA_preference_vicuna-13b_l0.pt"
 
-os.environ['HF_DATASETS_CACHE']='/mnt/file2/changye/tmp'
+# os.environ['HF_DATASETS_CACHE']='/mnt/file2/changye/tmp'
 # 读取 .pt 文件
 data = torch.load(file_path)
 
-dataset_path="/mnt/file2/changye/dataset/Align-Anything_preference"
+dataset_path="/aifs4su/yaodong/changye/data/AA_preference"
 train_dataset = load_dataset(
             dataset_path,
             split="train",
             trust_remote_code=True,
         )
 # 定义需要保留的列
-columns_to_keep = ["prompt", "Image", "conversation"]
+columns_to_keep = ["prompt", "image", "conversation"]
 
 # 使用 remove_columns 移除不需要的列
 train_dataset = train_dataset.remove_columns([col for col in train_dataset.column_names if col not in columns_to_keep])
@@ -89,7 +89,7 @@ for i in tqdm.tqdm(range(len(data_list)), desc="Processing data_list", unit="ite
                 index_set.add(j)
                 break  # 找到一个匹配就跳出内层循环，继续下一个 data_list 的元素
 # 定义文件路径
-cosi_file_path = "/mnt/file2/changye/dataset/Align-Anything-preference_interp/AA_preference_cosi_weight/cosi_feature_list.txt"  # 将此替换为你的文件路径
+cosi_file_path = "/aifs4su/yaodong/changye/data/AA_preference_vicuna-13b_interp/AA_preference_vicuna-13b_cosi_weight/cosi_feature_list.txt"  # 将此替换为你的文件路径
 
 # 读取文件并转换为字典
 osi_dict = {}

@@ -220,8 +220,8 @@ class SAETrainer:
             # self.activation_store.estimated_norm_scaling_factor = 10.375971870015167
         else:
             print("use pre-estimated norm scaling factor")
-            self.activation_store.estimated_norm_scaling_factor = 10.375971870015167
-
+            # self.activation_store.estimated_norm_scaling_factor = 3.007882380808667
+            self.activation_store.estimated_norm_scaling_factor = 2.046629953407447
     def _train_step(
         self,
         sae: TrainingSAE,

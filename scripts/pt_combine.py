@@ -23,6 +23,6 @@ def merge_pt_files(folder_path, output_file):
     print(f"所有 .pt 文件已合并到 {output_file}")
 
 # 示例用法
-folder_path = "/mnt/file2/changye/dataset/"  # 替换为你的文件夹路径
-output_file = "/mnt/file2/changye/Cherry_MLLM/Cheery_cherry.pt"  # 替换为你的输出文件路径
+folder_path = "/aifs4su/yaodong/changye/data/AA_preference_mistral-7b_interp"  # 替换为你的文件夹路径
+output_file = "/aifs4su/yaodong/changye/data/AA_preference_mistral-7b_interp/AA_preference_cosi_weight/AA_preference_vicuna-7b_cooccur.pt"  # 替换为你的输出文件路径
 merge_pt_files(folder_path, output_file)

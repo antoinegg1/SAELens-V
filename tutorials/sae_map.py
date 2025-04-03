@@ -11,8 +11,8 @@ from sae_lens.activation_visualization import (
 
 
 # 加载 SAE 模型
-sae_path = "/mnt/data/changye/checkpoints/checkpoints-Llavatext/xepk4xea/final_163840000"
-sae_device = "cuda:0"
+sae_path = "/aifs4su/yaodong/changye/checkpoints-V13/js6gmasq/final_122880000"
+sae_device = "cuda:7"
 sae = load_sae(sae_path, sae_device)
 
 # 获取特征向量矩阵

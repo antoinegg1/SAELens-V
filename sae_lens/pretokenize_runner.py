@@ -147,6 +147,7 @@ def process_image_list(urls_list):
     return images
 
 def process_examples(example, processor, cfg):
+    
     texts_list = example[cfg.column_name]
     urls = example[cfg.image_column_name]
     images_list = process_image_list(urls)
@@ -192,15 +193,16 @@ def process_examples(example, processor, cfg):
 
         # 应用聊天模板
         prompt = processor.apply_chat_template(conversation, add_generation_prompt=True)
-
+        # breakpoint()
         # 调用 processor 进行处理
-        processed = processor(images=images_in_prompt, text=prompt, return_tensors="pt")
+        # processed = processor(images=images_in_prompt, text=prompt, return_tensors="pt")
+        text_input = processor.tokenizer(prompt, return_tensors="pt")
+        image_input = processor.image_processor(images=images_in_prompt, return_tensors="pt")
 
-        # 提取处理后的数据
-        input_ids = processed["input_ids"]
-        pixel_values = processed["pixel_values"]
-        attention_mask = processed["attention_mask"]
-        image_sizes = processed["image_sizes"]
+        input_ids = text_input["input_ids"]
+        pixel_values =image_input["pixel_values"] 
+        attention_mask = text_input["attention_mask"]
+        image_sizes = image_input["image_sizes"]
 
         # 将数据添加到结果字典中
         result["input_ids"].append(input_ids)
@@ -218,11 +220,13 @@ def preprocess_dataset(
     processor,  # PreTrainedTokenizerBase object
     cfg  # PretokenizeRunnerConfig object
 ):
+    # breakpoint()
     # 使用 dataset.map 方法处理数据集
     processed_dataset = dataset.map(
         lambda example: process_examples(example, processor, cfg),
         batched=True,
         batch_size=300,
+        load_from_cache_file=False,
         remove_columns=dataset.column_names  # 移除原始列，保留处理后的列
     )
 
@@ -300,6 +304,7 @@ class PretokenizeRunner:
             raise ValueError(
                 "Dataset has multiple splits. Must provide a 'split' param."
             )
+
         if "llava" in self.cfg.tokenizer_name and self.cfg.image_column_name is not None:
             processor = LlavaNextProcessor.from_pretrained(self.cfg.tokenizer_name)
             batch_size = 100000

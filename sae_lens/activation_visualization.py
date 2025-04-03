@@ -1,5 +1,6 @@
 import os
 import pdb
+import io
 from typing import Any, cast
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
@@ -110,7 +111,7 @@ def process_single_example(example, system_prompt, user_prompt, assistant_prompt
         f"{user_prompt.format(input=prompt)}"
         f"{assistant_prompt.format(output='')}"
     )
-    image = example['image']
+    image =Image.open(io.BytesIO(example['image']))
     image = image.resize((336, 336)).convert('RGBA')
     text_input = processor.tokenizer(formatted_prompt, return_tensors="pt")
     image_input = processor.image_processor(images=image, return_tensors="pt")
@@ -286,6 +287,86 @@ def separate_feature(image_indice, feature_acts):
         cooccurrence_features.append(cooccurrence_feature)
 
     return cooccurrence_features
+
+def all_activation(image_indice, feature_acts):
+    """
+    参数：
+      image_indice: 一个形状为 (1176,) 的 tensor，包含图片 token 在整个序列中的索引。
+      feature_acts: 模型输出的激活特征，形状为 (1, total_tokens, feature_dim)。
+      
+    返回：
+      total_activation_all_list: 一个一维 list，包含所有 token 的 L0 激活值（即每个 token 中非零元素的数量）。
+      patch_indices_list: 一个一维 list，包含图片 token 的索引（排除了换行符所在位置）。
+    """
+    # 计算所有 token 的 L0 激活值
+    total_activation_all = (feature_acts.squeeze(0) != 0).sum(dim=-1).to(torch.float32)
+    total_activation_all_list = total_activation_all
+    
+    # 确保 image_indice 长度为 1176
+    assert image_indice.shape[0] == 1176, "image_indice length must be 1176"
+    
+    # 计算需要排除的换行符对应的 token 索引
+    newline_indices = torch.arange(
+        image_indice[0] + 576 + 24 - 1,
+        image_indice[0] + 576 * 2 + 24 - 1,
+        25
+    )
+    
+    # 筛选出有效的图片 token 索引（排除 newline_indices）
+    valid_indices = torch.tensor([i for i in image_indice if i not in newline_indices])
+    patch_indices_list = valid_indices
+    
+    return total_activation_all_list, patch_indices_list
+
+def weight_all_activation(image_indice, feature_acts, selected_feature_indices):
+    """
+    参数：
+      image_indice: 一个 shape 为 (1176,) 的 tensor，包含图片 token 在整个序列中的索引。
+      feature_acts: 模型输出的激活特征，形状为 (1, total_tokens, feature_dim)。
+      selected_feature_indices: 一个 list，格式为 [(idx, weight), ...]，用于在特征维度上筛选并加权计算 L0。
+    
+    返回：
+      total_activation_all_list: 一个一维 list，长度为 total_tokens，每个元素为对应 token 的加权 L0 激活值，
+                                 其中对文本 token 和图片 token都做了加权求和。
+      patch_indices_list: 一个一维 list，长度为 576，每个元素为图片 patch 的代表性 token 索引，
+                          这里先根据 image_indice 排除换行符 token，然后将剩余的 1152 个图片 token 按顺序两两组合，
+                          最后每个 patch 取两个 token 索引的均值（取整）。
+    """
+    # ------------------- 对整个序列的 token 进行加权 L0 计算 -------------------
+    # 获取总 token 数
+    total_tokens = feature_acts.shape[1]
+    # 从 selected_feature_indices 中提取特征维度索引和对应权重
+    selected_indices = [item[0] for item in selected_feature_indices]
+    weights = torch.tensor(
+        [item[1] for item in selected_feature_indices],
+        dtype=feature_acts.dtype,
+        device=feature_acts.device
+    )
+    # feature_acts: (1, total_tokens, feature_dim) -> squeeze: (total_tokens, feature_dim)
+    features = feature_acts.squeeze(0)
+    # 选取指定特征维度，结果 shape: (total_tokens, len(selected_indices))
+    selected_features = features[:, selected_indices]
+    # 计算非零掩码，并转换为 float
+    nonzero_mask = (selected_features != 0).float()
+    # 加权求和：对于每个 token，沿着特征维度乘以对应的权重并求和，结果 shape: (total_tokens,)
+    weighted_activation = (nonzero_mask * weights).sum(dim=-1)
+    total_activation_all_list = weighted_activation.tolist()
+
+    # ------------------- 针对图片 token 计算代表性 patch 索引 -------------------
+    # image_indice 长度应为 1176
+    assert image_indice.shape[0] == 1176, "image_indice length must be 1176"
+    # 根据固定公式计算换行符对应的 token 索引（这些 token不参与图片 patch 计算）
+    newline_indices = torch.arange(
+        image_indice[0] + 576 + 24 - 1,
+        image_indice[0] + 576 * 2 + 24 - 1,
+        25
+    )
+    # 过滤掉换行符 token，得到有效图片 token 索引
+    valid_indices = torch.tensor([i for i in image_indice if i not in newline_indices])
+
+    patch_indices_list = valid_indices.tolist()
+    
+    return total_activation_all_list, patch_indices_list
 
 
 def patch_mapping(image_indice, feature_acts):
@@ -535,7 +616,7 @@ def filter_diff_by_std(diff):
 
     return filtered_diff
 
-def generate_with_saev(inputs, hook_language_model, processor, save_path, image, sae, sae_device: str,max_new_tokens=100,selected_feature_indices=None):
+def generate_with_saev(inputs, hook_language_model, processor, save_path, image, sae, sae_device: str,max_new_tokens=100,selected_feature_indices=None,strategy="image"):
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     with torch.no_grad():
@@ -558,10 +639,13 @@ def generate_with_saev(inputs, hook_language_model, processor, save_path, image,
         image_indice=image_indice.squeeze(0)
         feature_acts_list = [feature_acts.to("cpu") for feature_acts in feature_acts_list]
         # print(feature_acts_list)
-        if selected_feature_indices is None:
+        if selected_feature_indices is None and strategy=="image":
             total_activation_l0_norms_list,patch_features_list,feature_acts_list = zip(*[patch_mapping(image_indice, feature_acts) for feature_acts in feature_acts_list])
-        elif selected_feature_indices is not None and type(selected_feature_indices[0])==tuple:
+        elif selected_feature_indices is not None and type(selected_feature_indices[0])==tuple and strategy=="image":
             total_activation_l0_norms_list,patch_features_list,feature_acts_list = zip(*[weight_patch_mapping(image_indice, feature_acts, selected_feature_indices) for feature_acts in feature_acts_list])
+        elif selected_feature_indices is not None and type(selected_feature_indices[0])==tuple and strategy=="all":
+            total_activation_all_list, patch_indices_list = zip(*[weight_all_activation(image_indice, feature_acts, selected_feature_indices) for feature_acts in feature_acts_list])
+            return total_activation_all_list, patch_indices_list,feature_acts_list
         else:
             total_activation_l0_norms_list,patch_features_list,feature_acts_list = zip(*[select_patch_mapping(image_indice, feature_acts, selected_feature_indices) for feature_acts in feature_acts_list])
         # current_activation_map = map_patches_to_image(total_activation_l1_norms_list[0])

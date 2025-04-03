@@ -7,6 +7,7 @@ from datasets import load_dataset
 import tqdm
 from PIL import Image
 import io
+from io import BytesIO
 from sae_lens.activation_visualization import (
     load_llava_model,
     load_sae,
@@ -46,8 +47,10 @@ def load_and_process_model(model_name: str, model_path: str, device: str, sae_pa
 
 def load_and_sample_dataset(dataset_path: str, start_idx,end_idx):
     """加载并从数据集中抽取样本"""
-
-    train_dataset = load_dataset(dataset_path, split="train")
+    if "MMInstruct-GPT4V" in dataset_path:
+        train_dataset = load_dataset(dataset_path,'qa_en', split="train",cache_dir="/aifs4su/yaodong/changye/tmp")
+    else:
+        train_dataset = load_dataset(dataset_path, split="train")
     total_size = len(train_dataset)
     if start_idx >= total_size:
         print(f"start index {start_idx} is beyond the dataset size {total_size}, returning empty dataset")
@@ -83,12 +86,13 @@ def format_Anything_sample(raw_sample: dict):
     
     prompt = raw_sample['question'].replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
     image = raw_sample['image']
+    image =Image.open(BytesIO(image))
     image = image.resize((336, 336)).convert('RGBA')
     text_hash=generate_text_hash(raw_sample['question']+raw_sample['response_1']+raw_sample['response_2'])
     
 
     formatted_prompt = f'{system_prompt}{user_prompt.format(input=prompt)}{assistant_prompt.format(output="")}'
-    return {'prompt': formatted_prompt, 'image': image,'text hash':text_hash}
+    return {'prompt': formatted_prompt, 'Image': image,'text hash':text_hash}
 
 def format_Compcap_sample(raw_sample: dict):
     """格式化样本，只提取 question 和 image 字段，并生成所需的 prompt"""
@@ -105,7 +109,21 @@ def format_Compcap_sample(raw_sample: dict):
     formatted_prompt = f'{system_prompt}{user_prompt.format(input=prompt)}{assistant_prompt.format(output="")}'
     return {'prompt': formatted_prompt, 'Image': image,'text hash':text_hash}
 
+def format_MMI_sample(raw_sample: dict):
+    """格式化样本，只提取 question 和 image 字段，并生成所需的 prompt"""
+    system_prompt = ""
+    user_prompt = 'USER: \n<image> {input}'
+    assistant_prompt = '\nASSISTANT: {output}'
+    
+    prompt = raw_sample['conversations'][0]["value"].replace('<image>\n', '').replace('\n<image>', '').replace('<image>', '')
+    image = "/aifs4su/yaodong/changye/images/"+raw_sample['image']
+    
+    image = Image.open(image)
+    image = image.resize((336, 336)).convert('RGBA')
+    text_hash=generate_text_hash(raw_sample['conversations'][0]["value"]+raw_sample['conversations'][1]["value"])
 
+    formatted_prompt = f'{system_prompt}{user_prompt.format(input=prompt)}{assistant_prompt.format(output="")}'
+    return {'prompt': formatted_prompt, 'Image': image,'text hash':text_hash}
 
 def format_RLAIFV_sample(raw_sample: dict):
     """格式化样本，只提取 question 和 image 字段，并生成所需的 prompt"""
@@ -123,7 +141,7 @@ def format_RLAIFV_sample(raw_sample: dict):
 
 def process_dataset(dataset, num_proc: int = 80):
     """使用 map 方法处理数据集"""
-    return dataset.map(format_Compcap_sample, num_proc=num_proc, remove_columns=['image'])
+    return dataset.map(format_Anything_sample, num_proc=num_proc, remove_columns=['image'])
 
 def prepare_inputs(processor, formatted_sample, device):
     text_input = processor.tokenizer(formatted_sample['prompt'], return_tensors="pt",padding=True,truncation=True,max_length=256,)
@@ -270,9 +288,9 @@ if __name__ == "__main__":
     parser.add_argument('--model_name', type=str, default="llava-hf/llava-v1.6-mistral-7b-hf", help="Name of the model.")
     parser.add_argument('--model_path', type=str, default="/mnt/file2/changye/model/llava", help="Path to the model directory.")
     parser.add_argument('--sae_path', type=str, default="/mnt/file2/changye/model/llavasae_obliec100k_SAEV", help="Path to the SAE model.")
-    parser.add_argument('--sae_device', type=str, default="cuda:5", help="Device for SAE model.")
+    parser.add_argument('--sae_device', type=str, default="cuda:3", help="Device for SAE model.")
     parser.add_argument('--device', type=str, default="cuda:0", help="Device for main model.")
-    parser.add_argument('--n_devices', type=int, default=8, help="Number of devices for model parallelism.")
+    parser.add_argument('--n_devices', type=int, default=6, help="Number of devices for model parallelism.")
 
     # Dataset configurations
     parser.add_argument('--dataset_path', type=str, default="/mnt/file2/changye/dataset/CompCap-gpt4/data", help="Path to the dataset.")
